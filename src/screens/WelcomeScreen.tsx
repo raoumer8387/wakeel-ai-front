@@ -331,7 +331,7 @@ const Badge: React.FC<BadgeProps> = ({ icon, label }) => (
 
 export const WelcomeScreen = ({ navigation }: any) => {
   const { signInWithGoogle } = useAuth();
-  
+
   const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
     clientId: '361401902601-phrs46oc97ds5ootflncd3iiocnvugo2.apps.googleusercontent.com',
   });
