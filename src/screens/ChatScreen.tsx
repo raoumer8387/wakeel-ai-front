@@ -54,6 +54,7 @@ const CATEGORIES = [
 export const ChatScreen = ({ navigation, route }: any) => {
   const { t } = useLanguage();
   const [messages, setMessages] = useState<Message[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [inputText, setInputText] = useState('');
   const [currentStep, setCurrentStep] = useState<Step>('start');
   const [isTyping, setIsTyping] = useState(false);
@@ -84,11 +85,11 @@ export const ChatScreen = ({ navigation, route }: any) => {
           sender: msg.role,
           timestamp: new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         }));
-        
+
         // Attach any documents to the latest agent2 message
         if (docRes.ok && docRes.data && docRes.data.documents.length > 0) {
           const docs = docRes.data.documents;
-          
+
           // Find the last agent2 message to append the attachment
           const latestAgent2Idx = [...mappedMessages].reverse().findIndex(m => m.sender === 'agent2');
           if (latestAgent2Idx !== -1) {
@@ -102,9 +103,9 @@ export const ChatScreen = ({ navigation, route }: any) => {
             };
           }
         }
-        
+
         setMessages(mappedMessages);
-        
+
         // Infer step from current state
         if (mappedMessages.length > 0) {
           const lastMsg = mappedMessages[mappedMessages.length - 1];
@@ -305,11 +306,11 @@ export const ChatScreen = ({ navigation, route }: any) => {
       <View style={styles.stepIndicatorContainer}>
         {steps.map((step, index) => {
           const isActive = currentStep === step.key;
-          const isCompleted = 
+          const isCompleted =
             (currentStep === 'consultation' && index < 1) ||
             (currentStep === 'drafting' && index < 2) ||
             (currentStep === 'complete' && index < 4);
-          
+
           return (
             <React.Fragment key={step.key}>
               <View style={styles.stepItem}>
@@ -381,7 +382,7 @@ export const ChatScreen = ({ navigation, route }: any) => {
                   <Text style={styles.fileName}>{item.attachment.name}</Text>
                   <Text style={styles.fileMeta}>{item.attachment.type} • {item.attachment.size}</Text>
                 </View>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.downloadBtn}
                   onPress={async () => {
                     if (item.attachment?.id) {
@@ -417,7 +418,7 @@ export const ChatScreen = ({ navigation, route }: any) => {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
-      
+
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation?.goBack()}>
@@ -452,15 +453,21 @@ export const ChatScreen = ({ navigation, route }: any) => {
             messages.length === 0 ? (
               <View style={styles.emptyState}>
                 <View style={styles.chipsContainer}>
-                  {CATEGORIES.map((cat) => (
-                    <TouchableOpacity 
-                      key={cat} 
-                      style={styles.chip}
-                      onPress={() => setInputText(cat)}
-                    >
-                      <Text style={styles.chipText}>{cat}</Text>
-                    </TouchableOpacity>
-                  ))}
+                  {CATEGORIES.map((cat) => {
+                    const isActive = selectedCategory === cat;
+                    return (
+                      <TouchableOpacity 
+                        key={cat} 
+                        style={[styles.chip, isActive && styles.chipActive]}
+                        onPress={() => {
+                          setSelectedCategory(cat);
+                          setInputText(cat);
+                        }}
+                      >
+                        <Text style={[styles.chipText, isActive && styles.chipTextActive]}>{cat}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
               </View>
             ) : null
@@ -487,7 +494,7 @@ export const ChatScreen = ({ navigation, route }: any) => {
               multiline
             />
           </View>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[
               styles.sendButton,
               (!inputText.trim() || pipelineActive) && styles.sendButtonDisabled
@@ -602,10 +609,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E8E8E8',
   },
+  chipActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
   chipText: {
     color: Colors.primary,
     fontWeight: '600',
     fontSize: 14,
+  },
+  chipTextActive: {
+    color: Colors.surface,
   },
   messageWrapper: {
     flexDirection: 'row',

@@ -89,7 +89,11 @@ const MainTabs = () => {
         name="Chat" 
         component={ChatScreen} 
         options={{
-          tabBarIcon: ({ color, size }) => <MessageSquare color={color} size={size} />,
+          tabBarIcon: ({ color, size, focused }) => (
+            <View style={[styles.tabIconContainer, focused && styles.tabIconContainerActive]}>
+              <MessageSquare color={focused ? Colors.surface : color} size={size} />
+            </View>
+          ),
           tabBarLabel: t('chat'),
         }}
       />
@@ -97,7 +101,11 @@ const MainTabs = () => {
         name="Cases" 
         component={CasesScreen} 
         options={{
-          tabBarIcon: ({ color, size }) => <Briefcase color={color} size={size} />,
+          tabBarIcon: ({ color, size, focused }) => (
+            <View style={[styles.tabIconContainer, focused && styles.tabIconContainerActive]}>
+              <Briefcase color={focused ? Colors.surface : color} size={size} />
+            </View>
+          ),
           tabBarLabel: t('cases'),
         }}
       />
@@ -105,7 +113,11 @@ const MainTabs = () => {
         name="Profile" 
         component={ProfileScreen} 
         options={{
-          tabBarIcon: ({ color, size }) => <UserIcon color={color} size={size} />,
+          tabBarIcon: ({ color, size, focused }) => (
+            <View style={[styles.tabIconContainer, focused && styles.tabIconContainerActive]}>
+              <UserIcon color={focused ? Colors.surface : color} size={size} />
+            </View>
+          ),
           tabBarLabel: t('profile'),
         }}
       />
