@@ -3,7 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { ActivityIndicator, View, StyleSheet, Platform } from 'react-native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Home, MessageSquare, Briefcase, User as UserIcon } from 'lucide-react-native';
 
 import { WelcomeScreen } from '../screens/WelcomeScreen';
@@ -13,6 +13,9 @@ import { HomeScreen } from '../screens/HomeScreen';
 import { ChatScreen } from '../screens/ChatScreen';
 import { CasesScreen } from '../screens/CasesScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
+import { AboutScreen } from '../screens/AboutScreen';
+import { PrivacyPolicyScreen } from '../screens/PrivacyPolicyScreen';
+import { TermsOfServiceScreen } from '../screens/TermsOfServiceScreen';
 
 import { AuthProvider, useAuth } from '../store/AuthContext';
 import { LanguageProvider, useLanguage } from '../store/LanguageContext';
@@ -23,6 +26,9 @@ export type RootStackParamList = {
   Login: undefined;
   Register: undefined;
   Main: undefined;
+  About: undefined;
+  PrivacyPolicy: undefined;
+  TermsOfService: undefined;
 };
 
 export type MainTabParamList = {
@@ -37,6 +43,20 @@ const Tab = createBottomTabNavigator<MainTabParamList>();
 
 const MainTabs = () => {
   const { t } = useLanguage();
+  const insets = useSafeAreaInsets();
+
+  const bottomPadding = Platform.select({
+    ios: insets.bottom > 0 ? insets.bottom : 25,
+    android: insets.bottom > 0 ? insets.bottom : 4,
+    default: 4,
+  });
+
+  const tabHeight = Platform.select({
+    ios: insets.bottom > 0 ? 52 + insets.bottom + 8 : 85,
+    android: insets.bottom > 0 ? 52 + insets.bottom + 4 : 60,
+    default: 60,
+  });
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -45,9 +65,9 @@ const MainTabs = () => {
           backgroundColor: Colors.surface,
           borderTopColor: Colors.border,
           borderTopWidth: 1,
-          height: Platform.OS === 'ios' ? 85 : 75,
-          paddingBottom: Platform.OS === 'ios' ? 25 : 15,
-          paddingTop: 8,
+          height: tabHeight,
+          paddingBottom: bottomPadding,
+          paddingTop: Platform.OS === 'ios' ? 8 : 4,
         },
         tabBarActiveTintColor: Colors.primary,
         tabBarInactiveTintColor: Colors.textSecondary,
@@ -113,7 +133,24 @@ const RootNavigator = () => {
       }}
     >
       {isAuthenticated ? (
-        <Stack.Screen name="Main" component={MainTabs} />
+        <>
+          <Stack.Screen name="Main" component={MainTabs} />
+          <Stack.Screen
+            name="About"
+            component={AboutScreen}
+            options={{ animation: 'slide_from_right' }}
+          />
+          <Stack.Screen
+            name="PrivacyPolicy"
+            component={PrivacyPolicyScreen}
+            options={{ animation: 'slide_from_right' }}
+          />
+          <Stack.Screen
+            name="TermsOfService"
+            component={TermsOfServiceScreen}
+            options={{ animation: 'slide_from_right' }}
+          />
+        </>
       ) : (
         <>
           <Stack.Screen name="Welcome" component={WelcomeScreen} />
