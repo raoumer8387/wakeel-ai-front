@@ -10,7 +10,6 @@ import {
   Platform,
   SafeAreaView,
   StatusBar,
-  ScrollView,
   Linking,
 } from 'react-native';
 import {
@@ -22,11 +21,10 @@ import {
   FileText,
   Check,
   User,
-  MoreVertical
 } from 'lucide-react-native';
 import { Colors, Spacing, BorderRadius } from '../constants/Theme';
 import { useLanguage } from '../store/LanguageContext';
-import { analyzeLegalQuery, streamChatQuery } from '../services/legalService';
+import { streamChatQuery } from '../services/legalService';
 import { getCaseMessages, getCaseDocuments, getDocumentDownloadUrl } from '../services/caseService';
 
 type SenderType = 'user' | 'agent1' | 'agent2';
@@ -44,7 +42,7 @@ interface Message {
   };
 }
 
-type Step = 'input' | 'agent1' | 'agent2' | 'done';
+type Step = 'start' | 'consultation' | 'drafting' | 'complete';
 
 const CATEGORIES = [
   'Divorce/Khula',
@@ -57,9 +55,12 @@ export const ChatScreen = ({ navigation, route }: any) => {
   const { t } = useLanguage();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
-  const [currentStep, setCurrentStep] = useState<Step>('input');
+  const [currentStep, setCurrentStep] = useState<Step>('start');
   const [isTyping, setIsTyping] = useState(false);
+  const [typingLabel, setTypingLabel] = useState('Wakeel is thinking...');
+  const [pipelineActive, setPipelineActive] = useState(false);
   const [caseId, setCaseId] = useState<string | null>(route?.params?.caseId || null);
+  const caseIdRef = useRef<string | null>(route?.params?.caseId || null);
   const flatListRef = useRef<FlatList>(null);
 
   useEffect(() => {
@@ -108,11 +109,11 @@ export const ChatScreen = ({ navigation, route }: any) => {
         if (mappedMessages.length > 0) {
           const lastMsg = mappedMessages[mappedMessages.length - 1];
           if (lastMsg.sender === 'user') {
-            setCurrentStep('agent1');
+            setCurrentStep('consultation');
           } else if (lastMsg.sender === 'agent1') {
-            setCurrentStep('agent2');
+            setCurrentStep('consultation');
           } else if (lastMsg.sender === 'agent2') {
-            setCurrentStep('done');
+            setCurrentStep('complete');
           }
         }
       }
@@ -136,125 +137,124 @@ export const ChatScreen = ({ navigation, route }: any) => {
     setMessages((prev) => [...prev, userMessage]);
     setInputText('');
     setIsTyping(true);
-    setCurrentStep('agent1');
-
-    let currentAgent1Text = '';
-    let currentAgent2Text = '';
-    
-    // Track references to messages so we can update them in real time
-    const agent1MsgId = (Date.now() + 1).toString();
-    const agent2MsgId = (Date.now() + 2).toString();
+    setTypingLabel('Wakeel is thinking...');
+    setPipelineActive(true);
+    setCurrentStep('consultation');
 
     try {
       await streamChatQuery(
         text,
-        caseId,
+        caseIdRef.current,
         (eventData) => {
           console.log("[SSE Event]:", eventData.event, eventData.message);
 
-          if (eventData.data?.case_id && !caseId) {
-            setCaseId(eventData.data.case_id);
-          }
-
           switch (eventData.event) {
             case 'pipeline_start':
-              setCurrentStep('agent1');
-              break;
-              
-            case 'agent1_start':
-              setCurrentStep('agent1');
+              setCurrentStep('consultation');
+              setTypingLabel('Wakeel is thinking...');
+              // Capture case_id from pipeline_start (top-level, earliest & safest)
+              if (eventData.case_id && !caseIdRef.current) {
+                caseIdRef.current = eventData.case_id;
+                setCaseId(eventData.case_id);
+              }
               break;
 
-            case 'agent1_done':
-              const brief = eventData.data?.brief || eventData.message;
-              currentAgent1Text = brief;
-              setMessages((prev) => {
-                const filtered = prev.filter(m => m.id !== agent1MsgId);
-                return [
-                  ...filtered,
-                  {
-                    id: agent1MsgId,
-                    text: currentAgent1Text,
-                    sender: 'agent1',
-                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                  }
-                ];
-              });
-              setCurrentStep('agent2');
+            case 'agent1_start':
+              setCurrentStep('consultation');
+              setIsTyping(true);
+              setTypingLabel('Legal Analyst is typing...');
+              break;
+
+            case 'agent1_message':
+              // Each agent1_message is a separate conversational reply — new bubble each time
+              setIsTyping(false);
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: Date.now().toString() + '_a1',
+                  text: eventData.message,
+                  sender: 'agent1',
+                  timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                }
+              ]);
               break;
 
             case 'agent2_start':
-              setCurrentStep('agent2');
+              setCurrentStep('drafting');
+              setIsTyping(true);
+              setTypingLabel('Document Specialist is typing...');
               break;
 
             case 'agent2_question':
-              currentAgent2Text = eventData.message;
-              setMessages((prev) => {
-                const filtered = prev.filter(m => m.id !== agent2MsgId);
-                return [
-                  ...filtered,
-                  {
-                    id: agent2MsgId,
-                    text: currentAgent2Text,
-                    sender: 'agent2',
-                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                  }
-                ];
-              });
+              // Agent 2 asking for missing info — render as normal bot bubble
               setIsTyping(false);
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: Date.now().toString() + '_a2q',
+                  text: eventData.message,
+                  sender: 'agent2',
+                  timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                }
+              ]);
               break;
 
-            case 'agent2_done':
-              if (eventData.message) {
-                currentAgent2Text = eventData.message;
-              }
-              // If case_id is available, fetch case documents
-              const activeCaseId = caseId || eventData.data?.case_id;
-              if (activeCaseId) {
-                getCaseDocuments(activeCaseId).then(docRes => {
-                  if (docRes.ok && docRes.data && docRes.data.documents.length > 0) {
-                    const doc = docRes.data.documents[0];
-                    setMessages((prev) => {
-                      return prev.map(m => {
-                        if (m.id === agent2MsgId) {
-                          return {
-                            ...m,
-                            text: currentAgent2Text || m.text,
-                            attachment: {
-                              id: doc.id,
-                              name: doc.file_path.split('/').pop() || 'Legal_Draft.pdf',
-                              type: 'PDF',
-                              size: '42 KB'
-                            }
-                          };
-                        }
-                        return m;
-                      });
-                    });
-                  }
-                });
-              }
+            case 'agent2_done': {
+              // Document drafted — show message with PDF attachment if available
+              setIsTyping(false);
+              const pdfPath = eventData.data?.pdf_path;
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: Date.now().toString() + '_a2done',
+                  text: eventData.message || 'Your document has been drafted successfully.',
+                  sender: 'agent2',
+                  timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                  attachment: pdfPath ? {
+                    name: pdfPath.split('/').pop() || 'Legal_Draft.pdf',
+                    type: 'PDF',
+                    size: 'Download',
+                  } : undefined,
+                }
+              ]);
               break;
+            }
 
             case 'simulation_start':
-              setCurrentStep('done');
+              setIsTyping(true);
+              setTypingLabel('Submitting to court...');
               break;
 
             case 'simulation_done':
-              setCurrentStep('done');
+              setIsTyping(false);
+              if (eventData.data?.case_ref) {
+                setMessages((prev) => [
+                  ...prev,
+                  {
+                    id: Date.now().toString() + '_sim',
+                    text: `\u2705 Case filed successfully!\nReference: ${eventData.data.case_ref}`,
+                    sender: 'agent2',
+                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                  }
+                ]);
+              }
+              setCurrentStep('complete');
               break;
 
             case 'complete':
               setIsTyping(false);
-              setCurrentStep('done');
-              const finalCaseId = caseId || eventData.data?.case_id;
+              setPipelineActive(false);
+              // Sync documents from server using case_id (nested in data on complete)
+              const finalCaseId = caseIdRef.current || eventData.data?.case_id;
               if (finalCaseId) {
-                loadCaseData(finalCaseId);
+                caseIdRef.current = finalCaseId;
+                setCaseId(finalCaseId);
               }
               break;
 
             case 'error':
               setIsTyping(false);
+              setPipelineActive(false);
               setMessages((prev) => [
                 ...prev,
                 {
@@ -269,9 +269,11 @@ export const ChatScreen = ({ navigation, route }: any) => {
         },
         () => {
           setIsTyping(false);
+          setPipelineActive(false);
         },
         (err) => {
           setIsTyping(false);
+          setPipelineActive(false);
           setMessages((prev) => [
             ...prev,
             {
@@ -285,17 +287,18 @@ export const ChatScreen = ({ navigation, route }: any) => {
       );
     } catch (error: any) {
       setIsTyping(false);
-      setCurrentStep('input');
+      setPipelineActive(false);
+      setCurrentStep('start');
     }
   };
 
 
   const renderStepIndicator = () => {
     const steps: { label: string; key: Step; icon: any }[] = [
-      { label: 'Input', key: 'input', icon: Check },
-      { label: 'Agent 1', key: 'agent1', icon: User },
-      { label: 'Agent 2', key: 'agent2', icon: User },
-      { label: 'Done', key: 'done', icon: Check },
+      { label: 'Start', key: 'start', icon: Check },
+      { label: 'Consultation', key: 'consultation', icon: User },
+      { label: 'Drafting', key: 'drafting', icon: User },
+      { label: 'Complete', key: 'complete', icon: Check },
     ];
 
     return (
@@ -303,9 +306,9 @@ export const ChatScreen = ({ navigation, route }: any) => {
         {steps.map((step, index) => {
           const isActive = currentStep === step.key;
           const isCompleted = 
-            (currentStep === 'agent1' && index < 1) ||
-            (currentStep === 'agent2' && index < 2) ||
-            (currentStep === 'done' && index < 4);
+            (currentStep === 'consultation' && index < 1) ||
+            (currentStep === 'drafting' && index < 2) ||
+            (currentStep === 'complete' && index < 4);
           
           return (
             <React.Fragment key={step.key}>
@@ -466,7 +469,7 @@ export const ChatScreen = ({ navigation, route }: any) => {
 
         {isTyping && (
           <View style={styles.typingIndicator}>
-            <Text style={styles.typingText}>Agent is thinking...</Text>
+            <Text style={styles.typingText}>{typingLabel}</Text>
           </View>
         )}
 
@@ -487,10 +490,10 @@ export const ChatScreen = ({ navigation, route }: any) => {
           <TouchableOpacity 
             style={[
               styles.sendButton,
-              !inputText.trim() && styles.sendButtonDisabled
+              (!inputText.trim() || pipelineActive) && styles.sendButtonDisabled
             ]}
             onPress={() => sendMessage(inputText)}
-            disabled={!inputText.trim() || isTyping}
+            disabled={!inputText.trim() || pipelineActive}
           >
             <Send color={Colors.surface} size={20} />
           </TouchableOpacity>

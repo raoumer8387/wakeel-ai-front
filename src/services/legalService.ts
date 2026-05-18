@@ -18,9 +18,10 @@ export interface LegalAnalysisResponse {
 }
 
 export interface SSEEvent {
-  event: 'pipeline_start' | 'agent1_start' | 'agent1_done' | 'agent2_start' | 'agent2_question' | 'agent2_done' | 'simulation_start' | 'simulation_done' | 'complete' | 'error';
+  event: 'pipeline_start' | 'agent1_start' | 'agent1_message' | 'agent2_start' | 'agent2_question' | 'agent2_done' | 'simulation_start' | 'simulation_done' | 'complete' | 'error';
   message: string;
   data?: any;
+  case_id?: string;
 }
 
 export const analyzeLegalQuery = async (

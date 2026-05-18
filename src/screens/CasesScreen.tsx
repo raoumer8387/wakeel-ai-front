@@ -16,11 +16,8 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import {
   Briefcase,
-  Code,
   Download,
   MessageSquare,
-  ChevronRight,
-  Terminal,
   FileText,
   Clock,
   ArrowUpRight,
@@ -29,75 +26,13 @@ import { Colors, Spacing, BorderRadius, Typography } from '../constants/Theme';
 import { useLanguage } from '../store/LanguageContext';
 import { getCases, getCaseDocuments, getDocumentDownloadUrl, Case } from '../services/caseService';
 
-/**
- * ============================================================================
- * WAKEEL-AI CASES & DEVELOPER API DOCUMENTATION CONSOLE
- * ============================================================================
- * This screen serves a dual purpose:
- * 1. Premium User Dashboard: Fetches and displays cases created by the user,
- *    allowing them to track status, resume conversations, and download PDFs.
- * 2. Interactive Developer API Console: Documents the complete REST/SSE API
- *    endpoints, models, event flows, and query examples for future engineering.
- * ============================================================================
- */
-
-interface EndpointDoc {
-  method: 'GET' | 'POST';
-  path: string;
-  description: string;
-  requestBody?: string;
-  responseBody: string;
-}
-
-const API_ENDPOINTS: EndpointDoc[] = [
-  {
-    method: 'POST',
-    path: '/api/v1/chat/query',
-    description: 'Primary SSE endpoint for interacting with the AI Legal Analyst (Agent 1) and Document Specialist (Agent 2) pipeline. It streams event-based responses to orchestrate real-time progress.',
-    requestBody: `{\n  "message": "I want a Khula. I live in Lahore.",\n  "case_id": "CASE_A1B2C3D4" // Optional\n}`,
-    responseBody: `event: pipeline_start | agent1_start | agent1_done | ...\ndata: {\n  "event": "agent1_done",\n  "message": "Legal brief created",\n  "data": {\n    "case_id": "CASE_A1B2C3D4",\n    "brief": "Khula petition grounds..."\n  }\n}`,
-  },
-  {
-    method: 'GET',
-    path: '/api/v1/cases/',
-    description: 'Retrieves all cases created by the currently authenticated user, sorted in descending order of creation date.',
-    responseBody: `{\n  "cases": [\n    {\n      "id": "CASE_A1B2C3D4",\n      "user_id": "user-uuid",\n      "title": "Khula Petition — Wife Divorce",\n      "issue_type": "khula",\n      "status": "filed",\n      "case_ref": "FC-LHR-2024-1234",\n      "created_at": "2024-05-17T12:00:00Z"\n    }\n  ]\n}`,
-  },
-  {
-    method: 'GET',
-    path: '/api/v1/cases/{case_id}',
-    description: 'Retrieves the complete detail dictionary of a specific case, including deep nested legal briefs and action logs.',
-    responseBody: `{\n  "id": "CASE_A1B2C3D4",\n  "title": "Khula Petition",\n  "status": "analysed",\n  "legal_brief": {\n    "brief": "Petitioner requests Khula on grounds of...",\n    "grounds": ["Incompatibility", "Cruelty"]\n  },\n  "action_log": [\n    { "action": "created", "timestamp": "2024-05-17T12:00:00Z" }\n  ]\n}`,
-  },
-  {
-    method: 'GET',
-    path: '/api/v1/cases/{case_id}/messages',
-    description: 'Retrieves complete chronological message log history exchanged between user and AI agents for a case.',
-    responseBody: `{\n  "messages": [\n    {\n      "id": "msg-uuid-1",\n      "role": "user",\n      "content": "I want a Khula.",\n      "created_at": "2024-05-17T12:00:00Z"\n    },\n    {\n      "id": "msg-uuid-2",\n      "role": "agent2",\n      "content": "Please enter your CNIC...",\n      "metadata_": { "missing_fields": ["APPLICANT_CNIC"] }\n    }\n  ]\n}`,
-  },
-  {
-    method: 'GET',
-    path: '/api/v1/documents/{case_id}',
-    description: 'Retrieves list of all system generated document logs and drafts associated with a specific case.',
-    responseBody: `{\n  "documents": [\n    {\n      "id": "doc-uuid",\n      "case_id": "CASE_A1B2C3D4",\n      "type": "khula",\n      "file_path": "data/output/CASE_A1B2C3D4_khula.pdf",\n      "created_at": "2024-05-17T12:05:00Z"\n    }\n  ]\n}`,
-  },
-  {
-    method: 'GET',
-    path: '/api/v1/documents/{doc_id}/download',
-    description: 'Downloads the actual generated PDF file for a specific document ID. Emits content type application/pdf.',
-    responseBody: `Binary Stream: [PDF Data Payload]`,
-  },
-];
-
 export const CasesScreen = ({ navigation }: any) => {
   const { t, language } = useLanguage();
   const isUrdu = language === 'ur';
 
-  const [activeTab, setActiveTab] = useState<'cases' | 'api'>('cases');
   const [cases, setCases] = useState<Case[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [expandedEndpoints, setExpandedEndpoints] = useState<Record<number, boolean>>({});
 
   const fetchUserCases = async (showLoader = true) => {
     if (showLoader) setLoading(true);
@@ -138,13 +73,6 @@ export const CasesScreen = ({ navigation }: any) => {
     } catch (err) {
       Alert.alert('', t('cases_download_failed'));
     }
-  };
-
-  const toggleEndpoint = (index: number) => {
-    setExpandedEndpoints((prev) => ({
-      ...prev,
-      [index]: !prev[index],
-    }));
   };
 
   const getStatusColor = (status: Case['status']) => {
@@ -254,94 +182,6 @@ export const CasesScreen = ({ navigation }: any) => {
     );
   };
 
-  const renderDeveloperConsole = () => {
-    return (
-      <ScrollView style={styles.apiContainer} showsVerticalScrollIndicator={false}>
-        <View style={styles.docIntroCard}>
-          <View style={[styles.docIntroHeader, isUrdu && styles.rtlRow]}>
-            <Terminal size={22} color={Colors.secondary} />
-            <Text style={[styles.docIntroTitle, isUrdu && styles.rtlText]}>
-              {t('cases_api_title')}
-            </Text>
-          </View>
-          <Text style={[styles.docIntroDesc, isUrdu && styles.rtlText]}>
-            {t('cases_api_desc')}
-          </Text>
-        </View>
-
-        <Text style={[styles.sectionHeader, isUrdu && styles.rtlText]}>
-          {t('cases_api_section')}
-        </Text>
-
-        {API_ENDPOINTS.map((endpoint, index) => {
-          const isExpanded = expandedEndpoints[index];
-          const isGet = endpoint.method === 'GET';
-          return (
-            <View key={index} style={styles.endpointCard}>
-              <TouchableOpacity
-                style={[styles.endpointHeader, isUrdu && styles.rtlRow]}
-                onPress={() => toggleEndpoint(index)}
-                activeOpacity={0.8}
-              >
-                <View style={[styles.endpointBadgeContainer, isUrdu && styles.rtlRow]}>
-                  <View
-                    style={[
-                      styles.methodBadge,
-                      { backgroundColor: isGet ? '#E6F5ED' : '#FDF0E8' },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.methodText,
-                        { color: isGet ? '#0F7B46' : '#C05621' },
-                      ]}
-                    >
-                      {endpoint.method}
-                    </Text>
-                  </View>
-                  <Text style={styles.endpointPath} numberOfLines={1}>
-                    {endpoint.path}
-                  </Text>
-                </View>
-                <ChevronRight
-                  size={18}
-                  color={Colors.textSecondary}
-                  style={{ transform: [{ rotate: isExpanded ? '90deg' : '0deg' }] }}
-                />
-              </TouchableOpacity>
-
-              {isExpanded && (
-                <View style={styles.endpointDetails}>
-                  <Text style={[styles.endpointDesc, isUrdu && styles.rtlText]}>
-                    {endpoint.description}
-                  </Text>
-
-                  {endpoint.requestBody && (
-                    <View style={styles.codeContainer}>
-                      <Text style={styles.codeLabel}>REQUEST JSON BODY</Text>
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                        <Text style={styles.codeText}>{endpoint.requestBody}</Text>
-                      </ScrollView>
-                    </View>
-                  )}
-
-                  <View style={[styles.codeContainer, { marginTop: 12 }]}>
-                    <Text style={styles.codeLabel}>RESPONSE PAYLOAD</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                      <Text style={styles.codeText}>{endpoint.responseBody}</Text>
-                    </ScrollView>
-                  </View>
-                </View>
-              )}
-            </View>
-          );
-        })}
-
-        <View style={{ height: 40 }} />
-      </ScrollView>
-    );
-  };
-
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
@@ -358,83 +198,58 @@ export const CasesScreen = ({ navigation }: any) => {
         </View>
       </View>
 
-      {/* Tabs */}
-      <View style={[styles.tabContainer, isUrdu && styles.rtlRow]}>
-        <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'cases' && styles.tabButtonActive]}
-          onPress={() => setActiveTab('cases')}
-        >
-          <Briefcase
-            size={18}
-            color={activeTab === 'cases' ? Colors.surface : Colors.primary}
-            style={{ marginRight: isUrdu ? 0 : 8, marginLeft: isUrdu ? 8 : 0 }}
-          />
-          <Text style={[styles.tabButtonText, activeTab === 'cases' && styles.tabButtonTextActive, isUrdu && styles.rtlText]}>
-            {t('cases_tab_active')} ({cases.length})
-          </Text>
-        </TouchableOpacity>
-
-        {cases.length > 0 && (
-          <TouchableOpacity
-            style={[styles.tabButton, activeTab === 'api' && styles.tabButtonActive]}
-            onPress={() => setActiveTab('api')}
-          >
-            <Code
-              size={18}
-              color={activeTab === 'api' ? Colors.surface : Colors.primary}
-              style={{ marginRight: isUrdu ? 0 : 8, marginLeft: isUrdu ? 8 : 0 }}
-            />
-            <Text style={[styles.tabButtonText, activeTab === 'api' && styles.tabButtonTextActive, isUrdu && styles.rtlText]}>
-              {t('cases_tab_api')}
-            </Text>
-          </TouchableOpacity>
-        )}
+      {/* Cases Count Bar */}
+      <View style={[styles.countBar, isUrdu && styles.rtlRow]}>
+        <Briefcase
+          size={18}
+          color={Colors.primary}
+          style={{ marginRight: isUrdu ? 0 : 8, marginLeft: isUrdu ? 8 : 0 }}
+        />
+        <Text style={[styles.countBarText, isUrdu && styles.rtlText]}>
+          {t('cases_tab_active')} ({cases.length})
+        </Text>
       </View>
 
-      {/* Main Content Area */}
-      {activeTab === 'cases' ? (
-        loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={Colors.primary} />
-            <Text style={[styles.loadingText, isUrdu && styles.rtlText]}>
-              {t('cases_loading')}
+      {/* Main Content */}
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={[styles.loadingText, isUrdu && styles.rtlText]}>
+            {t('cases_loading')}
+          </Text>
+        </View>
+      ) : cases.length === 0 ? (
+        <ScrollView contentContainerStyle={styles.emptyContainer}>
+          <Text style={[styles.emptyTitle, isUrdu && styles.rtlText]}>
+            {t('cases_empty_title')}
+          </Text>
+          <Text style={[styles.emptyDesc, isUrdu && styles.rtlText]}>
+            {t('cases_empty_desc')}
+          </Text>
+          <TouchableOpacity
+            style={[styles.emptyButton, isUrdu && styles.rtlRow]}
+            onPress={() => navigation.navigate('Chat')}
+          >
+            <ArrowUpRight
+              size={18}
+              color={Colors.surface}
+              style={{ marginRight: isUrdu ? 0 : 8, marginLeft: isUrdu ? 8 : 0 }}
+            />
+            <Text style={[styles.emptyButtonText, isUrdu && styles.rtlText]}>
+              {t('cases_start_first')}
             </Text>
-          </View>
-        ) : cases.length === 0 ? (
-          <ScrollView contentContainerStyle={styles.emptyContainer}>
-            <Text style={[styles.emptyTitle, isUrdu && styles.rtlText]}>
-              {t('cases_empty_title')}
-            </Text>
-            <Text style={[styles.emptyDesc, isUrdu && styles.rtlText]}>
-              {t('cases_empty_desc')}
-            </Text>
-            <TouchableOpacity
-              style={[styles.emptyButton, isUrdu && styles.rtlRow]}
-              onPress={() => navigation.navigate('Chat')}
-            >
-              <ArrowUpRight
-                size={18}
-                color={Colors.surface}
-                style={{ marginRight: isUrdu ? 0 : 8, marginLeft: isUrdu ? 8 : 0 }}
-              />
-              <Text style={[styles.emptyButtonText, isUrdu && styles.rtlText]}>
-                {t('cases_start_first')}
-              </Text>
-            </TouchableOpacity>
-          </ScrollView>
-        ) : (
-          <FlatList
-            data={cases}
-            keyExtractor={(item) => item.id}
-            renderItem={renderCaseItem}
-            contentContainerStyle={styles.listContainer}
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            showsVerticalScrollIndicator={false}
-          />
-        )
+          </TouchableOpacity>
+        </ScrollView>
       ) : (
-        renderDeveloperConsole()
+        <FlatList
+          data={cases}
+          keyExtractor={(item) => item.id}
+          renderItem={renderCaseItem}
+          contentContainerStyle={styles.listContainer}
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+          showsVerticalScrollIndicator={false}
+        />
       )}
     </SafeAreaView>
   );
@@ -475,31 +290,19 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     marginTop: 4,
   },
-  tabContainer: {
+  countBar: {
     flexDirection: 'row',
-    padding: Spacing.sm,
+    alignItems: 'center',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm + 2,
     backgroundColor: Colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  tabButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: BorderRadius.md,
-  },
-  tabButtonActive: {
-    backgroundColor: Colors.primary,
-  },
-  tabButtonText: {
+  countBarText: {
     fontSize: 14,
     fontWeight: '600',
     color: Colors.primary,
-  },
-  tabButtonTextActive: {
-    color: Colors.surface,
   },
   loadingContainer: {
     flex: 1,
@@ -668,106 +471,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: Colors.featureGreenText,
-  },
-  apiContainer: {
-    padding: Spacing.md,
-  },
-  docIntroCard: {
-    backgroundColor: '#E8EDF5',
-    borderWidth: 1,
-    borderColor: '#C5D0E6',
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    marginBottom: Spacing.lg,
-  },
-  docIntroHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 6,
-  },
-  docIntroTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: Colors.primary,
-  },
-  docIntroDesc: {
-    fontSize: 13,
-    lineHeight: 19,
-    color: Colors.primaryLight,
-  },
-  sectionHeader: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.text,
-    marginBottom: Spacing.md,
-  },
-  endpointCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.sm,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    marginBottom: Spacing.sm,
-    overflow: 'hidden',
-  },
-  endpointHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: Spacing.md,
-  },
-  endpointBadgeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    marginRight: Spacing.sm,
-  },
-  methodBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: BorderRadius.sm,
-    marginRight: 10,
-    width: 60,
-    alignItems: 'center',
-  },
-  methodText: {
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  endpointPath: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.text,
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    flex: 1,
-  },
-  endpointDetails: {
-    padding: Spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    backgroundColor: '#FDFDFB',
-  },
-  endpointDesc: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: Colors.textSecondary,
-    marginBottom: Spacing.md,
-  },
-  codeContainer: {
-    backgroundColor: '#1E1E24',
-    padding: 12,
-    borderRadius: BorderRadius.sm,
-  },
-  codeLabel: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#8E8EA0',
-    marginBottom: 6,
-  },
-  codeText: {
-    fontSize: 12,
-    color: '#E8E8ED',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    lineHeight: 16,
   },
 });
