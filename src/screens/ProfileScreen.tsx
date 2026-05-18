@@ -6,11 +6,13 @@ import { Colors, Spacing, BorderRadius } from '../constants/Theme';
 import { useLanguage } from '../store/LanguageContext';
 import { useAuth } from '../store/AuthContext';
 import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../navigation/AppNavigator';
 
 export const ProfileScreen = () => {
   const { language, setLanguage, t } = useLanguage();
   const { logout } = useAuth();
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
 
   return (
@@ -103,7 +105,7 @@ export const ProfileScreen = () => {
         {/* Legal Info */}
         <Text style={styles.sectionHeader}>{t('legal_info')}</Text>
         <View style={styles.card}>
-          <TouchableOpacity style={[styles.row, styles.borderBottom]}>
+          <TouchableOpacity style={[styles.row, styles.borderBottom]} onPress={() => navigation.navigate('About')}>
             <View style={styles.rowLeft}>
               <Info color="#1A1A2E" size={22} />
               <Text style={styles.rowTitle}>{t('about wakeel-ai')}</Text>
@@ -111,7 +113,7 @@ export const ProfileScreen = () => {
             <ChevronRight color="#BDBDBD" size={20} />
           </TouchableOpacity>
           
-          <TouchableOpacity style={[styles.row, styles.borderBottom]}>
+          <TouchableOpacity style={[styles.row, styles.borderBottom]} onPress={() => navigation.navigate('PrivacyPolicy')}>
             <View style={styles.rowLeft}>
               <Shield color="#1A1A2E" size={22} />
               <Text style={styles.rowTitle}>{t('privacy policy')}</Text>
@@ -119,7 +121,7 @@ export const ProfileScreen = () => {
             <ChevronRight color="#BDBDBD" size={20} />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.row}>
+          <TouchableOpacity style={styles.row} onPress={() => navigation.navigate('TermsOfService')}>
             <View style={styles.rowLeft}>
               <FileText color="#1A1A2E" size={22} />
               <Text style={styles.rowTitle}>{t('terms of service')}</Text>

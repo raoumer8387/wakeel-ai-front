@@ -13,6 +13,9 @@ import { HomeScreen } from '../screens/HomeScreen';
 import { ChatScreen } from '../screens/ChatScreen';
 import { CasesScreen } from '../screens/CasesScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
+import { AboutScreen } from '../screens/AboutScreen';
+import { PrivacyPolicyScreen } from '../screens/PrivacyPolicyScreen';
+import { TermsOfServiceScreen } from '../screens/TermsOfServiceScreen';
 
 import { AuthProvider, useAuth } from '../store/AuthContext';
 import { LanguageProvider, useLanguage } from '../store/LanguageContext';
@@ -23,6 +26,9 @@ export type RootStackParamList = {
   Login: undefined;
   Register: undefined;
   Main: undefined;
+  About: undefined;
+  PrivacyPolicy: undefined;
+  TermsOfService: undefined;
 };
 
 export type MainTabParamList = {
@@ -127,7 +133,24 @@ const RootNavigator = () => {
       }}
     >
       {isAuthenticated ? (
-        <Stack.Screen name="Main" component={MainTabs} />
+        <>
+          <Stack.Screen name="Main" component={MainTabs} />
+          <Stack.Screen
+            name="About"
+            component={AboutScreen}
+            options={{ animation: 'slide_from_right' }}
+          />
+          <Stack.Screen
+            name="PrivacyPolicy"
+            component={PrivacyPolicyScreen}
+            options={{ animation: 'slide_from_right' }}
+          />
+          <Stack.Screen
+            name="TermsOfService"
+            component={TermsOfServiceScreen}
+            options={{ animation: 'slide_from_right' }}
+          />
+        </>
       ) : (
         <>
           <Stack.Screen name="Welcome" component={WelcomeScreen} />
