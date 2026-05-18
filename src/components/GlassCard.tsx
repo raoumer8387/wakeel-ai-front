@@ -24,7 +24,7 @@ const styles = StyleSheet.create({
   container: {
     borderRadius: BorderRadius.lg,
     overflow: 'hidden',
-    backgroundColor: Colors.glass,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     borderWidth: 1,
     borderColor: Colors.border,
   },

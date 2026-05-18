@@ -21,7 +21,7 @@ export const ProfileScreen = () => {
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerIcon}>
             <ArrowLeft color="#1A1A2E" size={24} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Profile</Text>
+          <Text style={styles.headerTitle}>{t('profile')}</Text>
           <TouchableOpacity style={styles.headerIcon}>
             <PenLine color="#1A1A2E" size={24} />
           </TouchableOpacity>
@@ -38,36 +38,36 @@ export const ProfileScreen = () => {
               <BadgeCheck color="#FFFFFF" fill="#0F7B46" size={24} />
             </View>
           </View>
-          <Text style={styles.nameText}>Ahmed Khan</Text>
+          <Text style={styles.nameText}>{t('user_name')}</Text>
           <Text style={styles.emailText}>ahmed.khan@lawconnect.pk</Text>
-          <Text style={styles.memberText}>Member since May 2026</Text>
+          <Text style={styles.memberText}>{t('member_since')} May 2026</Text>
         </View>
 
         {/* Stats */}
         <View style={styles.statsRow}>
           <View style={styles.statBox}>
             <Text style={styles.statNumber}>12</Text>
-            <Text style={styles.statLabel}>Cases</Text>
+            <Text style={styles.statLabel}>{t('cases')}</Text>
           </View>
           <View style={styles.statBox}>
             <Text style={styles.statNumber}>45</Text>
-            <Text style={styles.statLabel}>Documents</Text>
+            <Text style={styles.statLabel}>{t('documents')}</Text>
           </View>
           <View style={styles.statBox}>
             <Text style={styles.statNumber}>08</Text>
-            <Text style={styles.statLabel}>Rights</Text>
+            <Text style={styles.statLabel}>{t('rights')}</Text>
           </View>
         </View>
 
         {/* Preferences */}
-        <Text style={styles.sectionHeader}>PREFERENCES</Text>
+        <Text style={styles.sectionHeader}>{t('preferences')}</Text>
         <View style={styles.card}>
           <View style={[styles.row, styles.borderBottom]}>
             <View style={styles.rowLeft}>
               <Globe color="#1A1A2E" size={22} />
               <View>
-                <Text style={styles.rowTitle}>Language</Text>
-                <Text style={styles.rowSubtitle}>Urdu / English</Text>
+                <Text style={styles.rowTitle}>{t('language')}</Text>
+                <Text style={styles.rowSubtitle}>{t('urdu_english')}</Text>
               </View>
             </View>
             <View style={styles.languageToggle}>
@@ -89,7 +89,7 @@ export const ProfileScreen = () => {
           <View style={styles.row}>
             <View style={styles.rowLeft}>
               <Bell color="#1A1A2E" size={22} />
-              <Text style={styles.rowTitle}>Notifications</Text>
+              <Text style={styles.rowTitle}>{t('notifications')}</Text>
             </View>
             <Switch
               value={notificationsEnabled}
@@ -101,12 +101,12 @@ export const ProfileScreen = () => {
         </View>
 
         {/* Legal Info */}
-        <Text style={styles.sectionHeader}>LEGAL INFO</Text>
+        <Text style={styles.sectionHeader}>{t('legal_info')}</Text>
         <View style={styles.card}>
           <TouchableOpacity style={[styles.row, styles.borderBottom]}>
             <View style={styles.rowLeft}>
               <Info color="#1A1A2E" size={22} />
-              <Text style={styles.rowTitle}>About Wakeel-AI</Text>
+              <Text style={styles.rowTitle}>{t('about wakeel-ai')}</Text>
             </View>
             <ChevronRight color="#BDBDBD" size={20} />
           </TouchableOpacity>
@@ -114,7 +114,7 @@ export const ProfileScreen = () => {
           <TouchableOpacity style={[styles.row, styles.borderBottom]}>
             <View style={styles.rowLeft}>
               <Shield color="#1A1A2E" size={22} />
-              <Text style={styles.rowTitle}>Privacy Policy</Text>
+              <Text style={styles.rowTitle}>{t('privacy policy')}</Text>
             </View>
             <ChevronRight color="#BDBDBD" size={20} />
           </TouchableOpacity>
@@ -122,7 +122,7 @@ export const ProfileScreen = () => {
           <TouchableOpacity style={styles.row}>
             <View style={styles.rowLeft}>
               <FileText color="#1A1A2E" size={22} />
-              <Text style={styles.rowTitle}>Terms of Service</Text>
+              <Text style={styles.rowTitle}>{t('terms of service')}</Text>
             </View>
             <ChevronRight color="#BDBDBD" size={20} />
           </TouchableOpacity>
@@ -131,7 +131,7 @@ export const ProfileScreen = () => {
         {/* Sign Out */}
         <TouchableOpacity style={styles.signOutButton} onPress={logout}>
           <LogOut color="#D32F2F" size={22} />
-          <Text style={styles.signOutText}>Sign Out</Text>
+          <Text style={styles.signOutText}>{t('sign out')}</Text>
         </TouchableOpacity>
 
       </ScrollView>

@@ -11,6 +11,7 @@ import {
   SafeAreaView,
   StatusBar,
   ScrollView,
+  Linking,
 } from 'react-native';
 import {
   ArrowLeft,
@@ -25,7 +26,8 @@ import {
 } from 'lucide-react-native';
 import { Colors, Spacing, BorderRadius } from '../constants/Theme';
 import { useLanguage } from '../store/LanguageContext';
-import { analyzeLegalQuery } from '../services/legalService';
+import { analyzeLegalQuery, streamChatQuery } from '../services/legalService';
+import { getCaseMessages, getCaseDocuments, getDocumentDownloadUrl } from '../services/caseService';
 
 type SenderType = 'user' | 'agent1' | 'agent2';
 
@@ -35,6 +37,7 @@ interface Message {
   sender: SenderType;
   timestamp: string;
   attachment?: {
+    id?: string;
     name: string;
     type: string;
     size: string;
@@ -50,13 +53,75 @@ const CATEGORIES = [
   'Property Rights'
 ];
 
-export const ChatScreen = ({ navigation }: any) => {
+export const ChatScreen = ({ navigation, route }: any) => {
   const { t } = useLanguage();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [currentStep, setCurrentStep] = useState<Step>('input');
   const [isTyping, setIsTyping] = useState(false);
+  const [caseId, setCaseId] = useState<string | null>(route?.params?.caseId || null);
   const flatListRef = useRef<FlatList>(null);
+
+  useEffect(() => {
+    if (caseId) {
+      loadCaseData(caseId);
+    }
+  }, [caseId]);
+
+  const loadCaseData = async (id: string) => {
+    try {
+      setIsTyping(true);
+      const [msgRes, docRes] = await Promise.all([
+        getCaseMessages(id),
+        getCaseDocuments(id)
+      ]);
+
+      if (msgRes.ok && msgRes.data) {
+        const mappedMessages: Message[] = msgRes.data.messages.map((msg: any) => ({
+          id: msg.id,
+          text: msg.content,
+          sender: msg.role,
+          timestamp: new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        }));
+        
+        // Attach any documents to the latest agent2 message
+        if (docRes.ok && docRes.data && docRes.data.documents.length > 0) {
+          const docs = docRes.data.documents;
+          
+          // Find the last agent2 message to append the attachment
+          const latestAgent2Idx = [...mappedMessages].reverse().findIndex(m => m.sender === 'agent2');
+          if (latestAgent2Idx !== -1) {
+            const idx = mappedMessages.length - 1 - latestAgent2Idx;
+            const doc = docs[0]; // Take primary document
+            mappedMessages[idx].attachment = {
+              id: doc.id,
+              name: doc.file_path.split('/').pop() || 'Legal_Draft.pdf',
+              type: 'PDF',
+              size: '42 KB'
+            };
+          }
+        }
+        
+        setMessages(mappedMessages);
+        
+        // Infer step from current state
+        if (mappedMessages.length > 0) {
+          const lastMsg = mappedMessages[mappedMessages.length - 1];
+          if (lastMsg.sender === 'user') {
+            setCurrentStep('agent1');
+          } else if (lastMsg.sender === 'agent1') {
+            setCurrentStep('agent2');
+          } else if (lastMsg.sender === 'agent2') {
+            setCurrentStep('done');
+          }
+        }
+      }
+      setIsTyping(false);
+    } catch (err) {
+      console.error("Failed to load case data:", err);
+      setIsTyping(false);
+    }
+  };
 
   const sendMessage = async (text: string) => {
     if (!text.trim()) return;
@@ -73,58 +138,157 @@ export const ChatScreen = ({ navigation }: any) => {
     setIsTyping(true);
     setCurrentStep('agent1');
 
+    let currentAgent1Text = '';
+    let currentAgent2Text = '';
+    
+    // Track references to messages so we can update them in real time
+    const agent1MsgId = (Date.now() + 1).toString();
+    const agent2MsgId = (Date.now() + 2).toString();
+
     try {
-      const response = await analyzeLegalQuery(text);
+      await streamChatQuery(
+        text,
+        caseId,
+        (eventData) => {
+          console.log("[SSE Event]:", eventData.event, eventData.message);
 
-      if (response.ok && response.data) {
-        const data = response.data;
+          if (eventData.data?.case_id && !caseId) {
+            setCaseId(eventData.data.case_id);
+          }
 
-        // Simulate Agent 1 thinking/responding
-        setTimeout(() => {
-          const agent1Message: Message = {
-            id: (Date.now() + 1).toString(),
-            text: `I have identified the legal context for your situation. I am now passing the details to Agent 2 to prepare the specific petition assessment and draft for you.`,
-            sender: 'agent1',
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          };
-          setMessages((prev) => [...prev, agent1Message]);
-          setCurrentStep('agent2');
+          switch (eventData.event) {
+            case 'pipeline_start':
+              setCurrentStep('agent1');
+              break;
+              
+            case 'agent1_start':
+              setCurrentStep('agent1');
+              break;
 
-          // Simulate Agent 2 responding
-          setTimeout(() => {
-            const agent2Message: Message = {
-              id: (Date.now() + 2).toString(),
-              text: data.brief || `Your petition analysis is ready. I have prepared the grounds based on the relevant sections of Pakistani law.`,
-              sender: 'agent2',
-              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              attachment: {
-                name: 'Legal_Draft_v1.pdf',
-                type: 'PDF',
-                size: '42 KB'
+            case 'agent1_done':
+              const brief = eventData.data?.brief || eventData.message;
+              currentAgent1Text = brief;
+              setMessages((prev) => {
+                const filtered = prev.filter(m => m.id !== agent1MsgId);
+                return [
+                  ...filtered,
+                  {
+                    id: agent1MsgId,
+                    text: currentAgent1Text,
+                    sender: 'agent1',
+                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                  }
+                ];
+              });
+              setCurrentStep('agent2');
+              break;
+
+            case 'agent2_start':
+              setCurrentStep('agent2');
+              break;
+
+            case 'agent2_question':
+              currentAgent2Text = eventData.message;
+              setMessages((prev) => {
+                const filtered = prev.filter(m => m.id !== agent2MsgId);
+                return [
+                  ...filtered,
+                  {
+                    id: agent2MsgId,
+                    text: currentAgent2Text,
+                    sender: 'agent2',
+                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                  }
+                ];
+              });
+              setIsTyping(false);
+              break;
+
+            case 'agent2_done':
+              if (eventData.message) {
+                currentAgent2Text = eventData.message;
               }
-            };
-            setMessages((prev) => [...prev, agent2Message]);
-            setIsTyping(false);
-            setCurrentStep('done');
-          }, 1500);
-        }, 1500);
-      } else {
-        // Handle error
-        const errorMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          text: "I encountered an error analyzing your query. Please try again.",
-          sender: 'agent1',
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        };
-        setMessages((prev) => [...prev, errorMessage]);
-        setIsTyping(false);
-        setCurrentStep('input');
-      }
-    } catch (error) {
+              // If case_id is available, fetch case documents
+              const activeCaseId = caseId || eventData.data?.case_id;
+              if (activeCaseId) {
+                getCaseDocuments(activeCaseId).then(docRes => {
+                  if (docRes.ok && docRes.data && docRes.data.documents.length > 0) {
+                    const doc = docRes.data.documents[0];
+                    setMessages((prev) => {
+                      return prev.map(m => {
+                        if (m.id === agent2MsgId) {
+                          return {
+                            ...m,
+                            text: currentAgent2Text || m.text,
+                            attachment: {
+                              id: doc.id,
+                              name: doc.file_path.split('/').pop() || 'Legal_Draft.pdf',
+                              type: 'PDF',
+                              size: '42 KB'
+                            }
+                          };
+                        }
+                        return m;
+                      });
+                    });
+                  }
+                });
+              }
+              break;
+
+            case 'simulation_start':
+              setCurrentStep('done');
+              break;
+
+            case 'simulation_done':
+              setCurrentStep('done');
+              break;
+
+            case 'complete':
+              setIsTyping(false);
+              setCurrentStep('done');
+              const finalCaseId = caseId || eventData.data?.case_id;
+              if (finalCaseId) {
+                loadCaseData(finalCaseId);
+              }
+              break;
+
+            case 'error':
+              setIsTyping(false);
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: Date.now().toString(),
+                  text: `An error occurred: ${eventData.message}`,
+                  sender: 'agent1',
+                  timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                }
+              ]);
+              break;
+          }
+        },
+        () => {
+          setIsTyping(false);
+        },
+        (err) => {
+          setIsTyping(false);
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: Date.now().toString(),
+              text: `Connection error: ${err}`,
+              sender: 'agent1',
+              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            }
+          ]);
+        }
+      );
+    } catch (error: any) {
       setIsTyping(false);
       setCurrentStep('input');
     }
   };
+
 
   const renderStepIndicator = () => {
     const steps: { label: string; key: Step; icon: any }[] = [
@@ -214,7 +378,21 @@ export const ChatScreen = ({ navigation }: any) => {
                   <Text style={styles.fileName}>{item.attachment.name}</Text>
                   <Text style={styles.fileMeta}>{item.attachment.type} • {item.attachment.size}</Text>
                 </View>
-                <TouchableOpacity style={styles.downloadBtn}>
+                <TouchableOpacity 
+                  style={styles.downloadBtn}
+                  onPress={async () => {
+                    if (item.attachment?.id) {
+                      try {
+                        const url = await getDocumentDownloadUrl(item.attachment.id);
+                        Linking.openURL(url);
+                      } catch (err: any) {
+                        console.error("Failed to download document:", err.message);
+                      }
+                    } else {
+                      alert("Document is still being drafted. Please try again in a few seconds.");
+                    }
+                  }}
+                >
                   <Download size={20} color={Colors.featureGreenText} />
                 </TouchableOpacity>
               </View>
