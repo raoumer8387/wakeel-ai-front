@@ -64,11 +64,20 @@ export const ChatScreen = ({ navigation, route }: any) => {
   const caseIdRef = useRef<string | null>(route?.params?.caseId || null);
   const flatListRef = useRef<FlatList>(null);
 
+  // Sync state and refs whenever route parameters change (e.g. navigating to different cases or starting a new one)
   useEffect(() => {
-    if (caseId) {
-      loadCaseData(caseId);
+    const newCaseId = route?.params?.caseId || null;
+    setCaseId(newCaseId);
+    caseIdRef.current = newCaseId;
+    if (newCaseId) {
+      loadCaseData(newCaseId);
+    } else {
+      // Reset state for a fresh new conversation
+      setMessages([]);
+      setCurrentStep('start');
+      setSelectedCategory(null);
     }
-  }, [caseId]);
+  }, [route?.params?.caseId]);
 
   const loadCaseData = async (id: string) => {
     try {

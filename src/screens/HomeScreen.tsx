@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { 
   View, 
   Text, 
@@ -9,9 +9,11 @@ import {
   StatusBar,
   ActivityIndicator,
   Alert,
+  RefreshControl,
+  Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { 
   ArrowLeft, 
   Folder, 
@@ -23,12 +25,73 @@ import {
 } from 'lucide-react-native';
 import { Colors, Spacing, BorderRadius } from '../constants/Theme';
 import { useLanguage } from '../store/LanguageContext';
-import { createNewChat } from '../services/caseService';
+import { useAuth } from '../store/AuthContext';
+import { 
+  createNewChat, 
+  getCaseStats, 
+  getCaseActivity, 
+  getCases,
+  Case,
+  CaseStats,
+  AgentActivity 
+} from '../services/caseService';
 
 export const HomeScreen = () => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const isUrdu = language === 'ur';
   const navigation = useNavigation<any>();
+  const { user } = useAuth();
+  
   const [creatingChat, setCreatingChat] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  
+  const [stats, setStats] = useState<CaseStats>({
+    total_cases: 0,
+    documents_generated: 0,
+    rights_analysed: 0,
+    cases_filed: 0
+  });
+  
+  const [activities, setActivities] = useState<AgentActivity[]>([]);
+  const [recentCases, setRecentCases] = useState<Case[]>([]);
+
+  const fetchDashboardData = async (showLoader = true) => {
+    if (showLoader) setLoading(true);
+    try {
+      const [statsRes, activityRes, casesRes] = await Promise.all([
+        getCaseStats(),
+        getCaseActivity(),
+        getCases(2) // Get top 2 recent cases
+      ]);
+
+      if (statsRes.ok && statsRes.data) {
+        setStats(statsRes.data);
+      }
+      if (activityRes.ok && activityRes.data) {
+        setActivities(activityRes.data);
+      }
+      if (casesRes.ok && casesRes.data) {
+        setRecentCases(casesRes.data.cases || []);
+      }
+    } catch (err) {
+      console.error('[HomeScreen] Error loading dashboard data:', err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchDashboardData(true);
+    }, [])
+  );
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    fetchDashboardData(false);
+  };
 
   const handleNewConsultation = async () => {
     if (creatingChat) return;
@@ -52,154 +115,183 @@ export const HomeScreen = () => {
       <StatusBar barStyle="dark-content" backgroundColor={Colors.background} />
       
       {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <TouchableOpacity>
-            <ArrowLeft color={Colors.primary} size={24} />
+      <View style={[styles.header, isUrdu && styles.rtlRow]}>
+        <View style={[styles.headerLeft, isUrdu && styles.rtlRow]}>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <ArrowLeft color={Colors.primary} size={24} style={isUrdu ? { transform: [{ scaleX: -1 }] } : null} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Wakeel-AI</Text>
         </View>
         <Image 
-          source={{ uri: 'https://randomuser.me/api/portraits/men/32.jpg' }} 
+          source={{ uri: user?.avatar_url || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200' }} 
           style={styles.avatar} 
         />
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        
-        {/* Greeting Section */}
-        <View style={styles.greetingSection}>
-          <Text style={styles.greetingTitle}>{t('greeting')}, Ahmed</Text>
-          <Text style={styles.greetingSubtitle}>{t('case_overview')}</Text>
+      {loading && !refreshing ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
         </View>
-
-        {/* Stats Grid */}
-        <View style={styles.statsGrid}>
-          <View style={styles.statCard}>
-            <View style={styles.statHeader}>
-              <Folder color={Colors.primary} size={18} />
-              <Text style={styles.statLabel}>{t('total_cases')}</Text>
-            </View>
-            <Text style={[styles.statValue, { color: Colors.primary }]}>12</Text>
-          </View>
+      ) : (
+        <ScrollView 
+          showsVerticalScrollIndicator={false} 
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[Colors.primary]} />
+          }
+        >
           
-          <View style={styles.statCard}>
-            <View style={styles.statHeader}>
-              <FileText color="#0F7B46" size={18} />
-              <Text style={styles.statLabel}>{t('docs_generated').replace(' ', '\n')}</Text>
-            </View>
-            <Text style={[styles.statValue, { color: '#0F7B46' }]}>48</Text>
-          </View>
-
-          <View style={styles.statCard}>
-            <View style={styles.statHeader}>
-              <Scale color="#C05621" size={18} />
-              <Text style={styles.statLabel}>{t('rights_analysed').replace(' ', '\n')}</Text>
-            </View>
-            <Text style={[styles.statValue, { color: '#C05621' }]}>07</Text>
-          </View>
-
-          <View style={styles.statCard}>
-            <View style={styles.statHeader}>
-              <CheckCircle color="#0F7B46" size={18} />
-              <Text style={styles.statLabel}>{t('cases_filed')}</Text>
-            </View>
-            <Text style={[styles.statValue, { color: '#0F7B46' }]}>03</Text>
-          </View>
-        </View>
-
-        {/* Agent Activity */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>{t('agent_activity')}</Text>
-          <View style={styles.liveBadge}>
-            <View style={styles.liveDot} />
-            <Text style={styles.liveText}>{t('live')}</Text>
-          </View>
-        </View>
-
-        <View style={styles.activityCard}>
-          <View style={styles.activityItem}>
-            <View>
-              <Text style={styles.activityTitle}>Khula Draft Review</Text>
-              <Text style={styles.activitySubtitle}>Scanning requirements</Text>
-            </View>
-            <View style={styles.statusProcessing}>
-              <Text style={styles.statusProcessingText}>{t('processing')}</Text>
-            </View>
-          </View>
-          <View style={styles.divider} />
-          <View style={styles.activityItem}>
-            <View>
-              <Text style={styles.activityTitle}>Succession Certificate</Text>
-              <Text style={styles.activitySubtitle}>Finalizing document</Text>
-            </View>
-            <View style={styles.statusCompleted}>
-              <Text style={styles.statusCompletedText}>{t('completed')}</Text>
-            </View>
-          </View>
-          <View style={styles.divider} />
-          <View style={styles.activityItem}>
-            <View>
-              <Text style={styles.activityTitle}>Child Custody Rights</Text>
-              <Text style={styles.activitySubtitle}>Analyzing laws</Text>
-            </View>
-            <View style={styles.statusProcessing}>
-              <Text style={styles.statusProcessingText}>{t('processing')}</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Recent Cases */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>{t('recent_cases')}</Text>
-          <TouchableOpacity style={styles.viewAllBtn}>
-            <Text style={styles.viewAllText}>{t('view_all')}</Text>
-            <ChevronRight color={Colors.primary} size={16} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Case Card 1 */}
-        <View style={styles.caseCard}>
-          <View style={styles.caseHeader}>
-            <View style={styles.caseCategoryTag}>
-              <Text style={styles.caseCategoryText}>Family Law</Text>
-            </View>
-            <Text style={styles.caseDate}>Oct 24, 2023</Text>
-          </View>
-          <View style={styles.caseBody}>
-            <Text style={styles.caseTitle}>Khula Petition — Divorce</Text>
-            <View style={[styles.statusProcessing, { alignSelf: 'flex-start', marginBottom: 8 }]}>
-              <Text style={styles.statusProcessingText}>{t('under_review')}</Text>
-            </View>
-            <Text style={styles.caseDescription}>
-              Detailed drafting of the Khula petition following the Family Courts Act 1964...
+          {/* Greeting Section */}
+          <View style={[styles.greetingSection, isUrdu && styles.rtlTextContainer]}>
+            <Text style={[styles.greetingTitle, isUrdu && styles.rtlText]}>
+              {t('greeting')}, {user?.name || 'User'}
+            </Text>
+            <Text style={[styles.greetingSubtitle, isUrdu && styles.rtlText]}>
+              {t('case_overview')}
             </Text>
           </View>
-        </View>
 
-        {/* Case Card 2 */}
-        <View style={[styles.caseCard, { backgroundColor: '#B8F2D1' }]}>
-          <View style={styles.caseHeader}>
-            <View style={[styles.caseCategoryTag, { backgroundColor: '#1C6641' }]}>
-              <Text style={styles.caseCategoryText}>Property Law</Text>
+          {/* Stats Grid */}
+          <View style={[styles.statsGrid, isUrdu && styles.rtlRowWrap]}>
+            <View style={styles.statCard}>
+              <View style={[styles.statHeader, isUrdu && styles.rtlRow]}>
+                <Folder color={Colors.primary} size={18} />
+                <Text style={[styles.statLabel, isUrdu && styles.rtlText]}>{t('total_cases')}</Text>
+              </View>
+              <Text style={[styles.statValue, isUrdu && styles.rtlText, { color: Colors.primary }]}>
+                {stats.total_cases.toString().padStart(2, '0')}
+              </Text>
             </View>
-            <Text style={styles.caseDate}>Oct 21, 2023</Text>
-          </View>
-          <View style={[styles.caseBody, { backgroundColor: '#FFFFFF', borderBottomLeftRadius: BorderRadius.lg, borderBottomRightRadius: BorderRadius.lg }]}>
-            <Text style={styles.caseTitle}>Inheritance Claim</Text>
-            <View style={[styles.statusCompleted, { alignSelf: 'flex-start', marginBottom: 8 }]}>
-              <Text style={styles.statusCompletedText}>{t('approved')}</Text>
+            
+            <View style={styles.statCard}>
+              <View style={[styles.statHeader, isUrdu && styles.rtlRow]}>
+                <FileText color="#0F7B46" size={18} />
+                <Text style={[styles.statLabel, isUrdu && styles.rtlText]}>{t('docs_generated').replace(' ', '\n')}</Text>
+              </View>
+              <Text style={[styles.statValue, isUrdu && styles.rtlText, { color: '#0F7B46' }]}>
+                {stats.documents_generated.toString().padStart(2, '0')}
+              </Text>
             </View>
-            <Text style={styles.caseDescription}>
-              Calculation of shares according to Islamic Inheritance Law for...
-            </Text>
-          </View>
-        </View>
 
-      </ScrollView>
+            <View style={styles.statCard}>
+              <View style={[styles.statHeader, isUrdu && styles.rtlRow]}>
+                <Scale color="#C05621" size={18} />
+                <Text style={[styles.statLabel, isUrdu && styles.rtlText]}>{t('rights_analysed').replace(' ', '\n')}</Text>
+              </View>
+              <Text style={[styles.statValue, isUrdu && styles.rtlText, { color: '#C05621' }]}>
+                {stats.rights_analysed.toString().padStart(2, '0')}
+              </Text>
+            </View>
+
+            <View style={styles.statCard}>
+              <View style={[styles.statHeader, isUrdu && styles.rtlRow]}>
+                <CheckCircle color="#0F7B46" size={18} />
+                <Text style={[styles.statLabel, isUrdu && styles.rtlText]}>{t('cases_filed')}</Text>
+              </View>
+              <Text style={[styles.statValue, isUrdu && styles.rtlText, { color: '#0F7B46' }]}>
+                {stats.cases_filed.toString().padStart(2, '0')}
+              </Text>
+            </View>
+          </View>
+
+          {/* Agent Activity */}
+          <View style={[styles.sectionHeader, isUrdu && styles.rtlRow]}>
+            <Text style={[styles.sectionTitle, isUrdu && styles.rtlText]}>{t('agent_activity')}</Text>
+            <View style={[styles.liveBadge, isUrdu && styles.rtlRow]}>
+              <View style={styles.liveDot} />
+              <Text style={styles.liveText}>{t('live')}</Text>
+            </View>
+          </View>
+
+          <View style={styles.activityCard}>
+            {activities.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Text style={[styles.emptyText, isUrdu && styles.rtlText]}>
+                  {isUrdu ? 'کوئی فعال ایجنٹ کام نہیں ہے' : 'No active or completed agent tasks.'}
+                </Text>
+              </View>
+            ) : (
+              activities.map((act, index) => (
+                <View key={act.id}>
+                  <View style={[styles.activityItem, isUrdu && styles.rtlRow]}>
+                    <View style={isUrdu && styles.rtlTextContainer}>
+                      <Text style={[styles.activityTitle, isUrdu && styles.rtlText]}>{act.title}</Text>
+                      <Text style={[styles.activitySubtitle, isUrdu && styles.rtlText]}>{act.subtitle}</Text>
+                    </View>
+                    <View style={act.status === 'completed' ? styles.statusCompleted : styles.statusProcessing}>
+                      <Text style={act.status === 'completed' ? styles.statusCompletedText : styles.statusProcessingText}>
+                        {act.status === 'completed' ? t('completed') : t('processing')}
+                      </Text>
+                    </View>
+                  </View>
+                  {index < activities.length - 1 && <View style={styles.divider} />}
+                </View>
+              ))
+            )}
+          </View>
+
+          {/* Recent Cases */}
+          <View style={[styles.sectionHeader, isUrdu && styles.rtlRow]}>
+            <Text style={[styles.sectionTitle, isUrdu && styles.rtlText]}>{t('recent_cases')}</Text>
+            <TouchableOpacity style={[styles.viewAllBtn, isUrdu && styles.rtlRow]} onPress={() => navigation.navigate('CasesTab')}>
+              <Text style={styles.viewAllText}>{t('view_all')}</Text>
+              <ChevronRight color={Colors.primary} size={16} style={isUrdu ? { transform: [{ scaleX: -1 }] } : null} />
+            </TouchableOpacity>
+          </View>
+
+          {recentCases.length === 0 ? (
+            <View style={styles.emptyCasesCard}>
+              <Text style={[styles.emptyCasesText, isUrdu && styles.rtlText]}>
+                {isUrdu ? 'کوئی حالیہ مقدمہ نہیں ہے۔ اپنا پہلا مشورہ شروع کرنے کے لئے نیچے بٹن پر کلک کریں!' : 'No recent cases. Click the button below to start your first consultation!'}
+              </Text>
+            </View>
+          ) : (
+            recentCases.map((item) => {
+              const isFiled = item.status === 'filed';
+              const formattedDate = item.created_at
+                ? new Date(item.created_at).toLocaleDateString([], {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                  })
+                : t('cases_pending');
+
+              return (
+                <TouchableOpacity 
+                  key={item.id} 
+                  style={[styles.caseCard, isFiled && { backgroundColor: '#B8F2D1' }]}
+                  onPress={() => navigation.navigate('Chat', { caseId: item.id })}
+                  activeOpacity={0.9}
+                >
+                  <View style={[styles.caseHeader, isUrdu && styles.rtlRow]}>
+                    <View style={[styles.caseCategoryTag, isFiled && { backgroundColor: '#1C6641' }]}>
+                      <Text style={styles.caseCategoryText}>{(item.issue_type || 'General').toUpperCase()}</Text>
+                    </View>
+                    <Text style={[styles.caseDate, isFiled && { color: '#1C6641' }]}>{formattedDate}</Text>
+                  </View>
+                  <View style={[styles.caseBody, isUrdu && styles.rtlTextContainer, isFiled && { backgroundColor: '#FFFFFF', borderBottomLeftRadius: BorderRadius.lg, borderBottomRightRadius: BorderRadius.lg }]}>
+                    <Text style={[styles.caseTitle, isUrdu && styles.rtlText]}>{item.title || t('cases_untitled')}</Text>
+                    <View style={[isFiled ? styles.statusCompleted : styles.statusProcessing, { alignSelf: isUrdu ? 'flex-end' : 'flex-start', marginBottom: 8 }]}>
+                      <Text style={isFiled ? styles.statusCompletedText : styles.statusProcessingText}>
+                        {(item.status || 'draft').toUpperCase()}
+                      </Text>
+                    </View>
+                    <Text style={[styles.caseDescription, isUrdu && styles.rtlText]} numberOfLines={2}>
+                      {item.legal_brief 
+                        ? (typeof item.legal_brief === 'string' ? item.legal_brief : item.legal_brief.brief || t('cases_no_grounds'))
+                        : (isUrdu ? 'اس مقدمے کے لیے ابھی تک کوئی تجزیہ نہیں کیا گیا ہے۔' : 'No analysis has been generated for this case yet.')}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })
+          )}
+
+        </ScrollView>
+      )}
 
       {/* Floating Action Button */}
-      <TouchableOpacity style={[styles.fab, creatingChat && { opacity: 0.6 }]} onPress={handleNewConsultation} disabled={creatingChat}>
+      <TouchableOpacity style={[styles.fab, creatingChat && { opacity: 0.6 }]} onPress={handleNewConsultation} disabled={creatingChat} activeOpacity={0.8}>
         {creatingChat ? (
           <ActivityIndicator size={20} color={Colors.surface} />
         ) : (
@@ -214,11 +306,16 @@ export const HomeScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FAF9F6', // Lighter off-white matching screenshot
+    backgroundColor: '#FAF9F6',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   scrollContent: {
     paddingHorizontal: Spacing.lg,
-    paddingBottom: 100, // Space for FAB
+    paddingBottom: 120,
   },
   header: {
     flexDirection: 'row',
@@ -323,6 +420,8 @@ const styles = StyleSheet.create({
     borderColor: '#E8E8E8',
     marginBottom: Spacing.xl,
     padding: Spacing.md,
+    minHeight: 60,
+    justifyContent: 'center',
   },
   activityItem: {
     flexDirection: 'row',
@@ -378,7 +477,7 @@ const styles = StyleSheet.create({
     marginRight: 2,
   },
   caseCard: {
-    backgroundColor: '#E6E6FA', // Light purple for first card
+    backgroundColor: '#E6E6FA',
     borderRadius: BorderRadius.lg,
     marginBottom: Spacing.md,
   },
@@ -421,11 +520,36 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     lineHeight: 20,
   },
+  emptyContainer: {
+    paddingVertical: Spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyText: {
+    color: Colors.textSecondary,
+    fontSize: 14,
+  },
+  emptyCasesCard: {
+    backgroundColor: '#F3F2F8',
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: '#E8E8E8',
+    padding: Spacing.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.md,
+  },
+  emptyCasesText: {
+    color: Colors.textSecondary,
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
   fab: {
     position: 'absolute',
     bottom: Spacing.lg,
     right: Spacing.lg,
-    backgroundColor: '#0F0D35', // Very dark blue
+    backgroundColor: '#0F0D35',
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Spacing.lg,
@@ -442,5 +566,20 @@ const styles = StyleSheet.create({
     color: Colors.surface,
     fontWeight: '600',
     fontSize: 15,
+  },
+  // RTL Helpers
+  rtlRow: {
+    flexDirection: 'row-reverse',
+  },
+  rtlRowWrap: {
+    flexDirection: 'row-reverse',
+    flexWrap: 'wrap',
+  },
+  rtlText: {
+    textAlign: 'right',
+    writingDirection: 'rtl',
+  },
+  rtlTextContainer: {
+    alignItems: 'flex-end',
   },
 });

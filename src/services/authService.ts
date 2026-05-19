@@ -8,6 +8,7 @@ export interface AuthUser {
   name: string;
   email: string;
   phone: string | null;
+  cnic: string | null;
   avatar_url: string | null;
   is_active: boolean;
   created_at: string;
@@ -26,11 +27,19 @@ export interface RegisterPayload {
   email: string;
   password: string;
   phone?: string;
+  cnic?: string;
 }
 
 export interface LoginPayload {
   email: string;
   password: string;
+}
+
+export interface ProfileUpdatePayload {
+  name?: string;
+  phone?: string;
+  cnic?: string;
+  avatar_url?: string;
 }
 
 // ─── Auth API Calls ─────────────────────────────────────────────────
@@ -97,6 +106,22 @@ export const logout = async () => {
     console.log('Backend logout failed, proceeding with local logout', e);
   }
   await clearTokens();
+};
+
+/**
+ * Update user profile details (name, phone, cnic, avatar_url).
+ */
+export const updateProfile = async (payload: ProfileUpdatePayload) => {
+  const result = await authenticatedRequest<AuthUser>('/api/v1/auth/profile', {
+    method: 'PUT',
+    body: payload as any,
+  });
+
+  if (result.ok && result.data) {
+    await AsyncStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(result.data));
+  }
+
+  return result;
 };
 
 /**

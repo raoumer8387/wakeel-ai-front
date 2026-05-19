@@ -32,8 +32,36 @@ export interface CaseDocument {
   created_at: string;
 }
 
-export const getCases = async (): Promise<ApiResponse<{ cases: Case[] }>> => {
-  return authenticatedRequest<{ cases: Case[] }>('/api/v1/cases/', {
+export interface CaseStats {
+  total_cases: number;
+  documents_generated: number;
+  rights_analysed: number;
+  cases_filed: number;
+}
+
+export interface AgentActivity {
+  id: string;
+  title: string;
+  subtitle: string;
+  status: 'processing' | 'completed';
+  updated_at?: string;
+}
+
+export const getCases = async (limit?: number): Promise<ApiResponse<{ cases: Case[] }>> => {
+  const endpoint = limit !== undefined ? `/api/v1/cases/?limit=${limit}` : '/api/v1/cases/';
+  return authenticatedRequest<{ cases: Case[] }>(endpoint, {
+    method: 'GET',
+  });
+};
+
+export const getCaseStats = async (): Promise<ApiResponse<CaseStats>> => {
+  return authenticatedRequest<CaseStats>('/api/v1/cases/stats', {
+    method: 'GET',
+  });
+};
+
+export const getCaseActivity = async (): Promise<ApiResponse<AgentActivity[]>> => {
+  return authenticatedRequest<AgentActivity[]>('/api/v1/cases/activity', {
     method: 'GET',
   });
 };

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   AuthUser,
   AuthResponse,
@@ -10,7 +11,7 @@ import {
   logout as logoutApi,
   getStoredUser,
 } from '../services/authService';
-import { getAccessToken } from '../services/api';
+import { getAccessToken, STORAGE_KEYS } from '../services/api';
 
 // ─── Context Types ──────────────────────────────────────────────────
 
@@ -22,6 +23,7 @@ interface AuthContextType {
   register: (payload: RegisterPayload) => Promise<{ ok: boolean; error?: string }>;
   signInWithGoogle: (idToken: string) => Promise<{ ok: boolean; error?: string }>;
   logout: () => Promise<void>;
+  updateUser: (updatedUser: AuthUser) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -80,6 +82,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
   }, []);
 
+  const updateUser = useCallback(async (newUser: AuthUser) => {
+    setUser(newUser);
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(newUser));
+    } catch (e) {
+      console.error('[AuthContext] Error updating local user storage:', e);
+    }
+  }, []);
+
   return (
     <AuthContext.Provider
       value={{
@@ -90,6 +101,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         register,
         signInWithGoogle,
         logout,
+        updateUser,
       }}
     >
       {children}

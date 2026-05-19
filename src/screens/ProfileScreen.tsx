@@ -1,19 +1,133 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Switch, Image, ScrollView } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View, Text, StyleSheet, TouchableOpacity, Switch, Image, ScrollView,
+  Modal, TextInput, KeyboardAvoidingView, Platform, ActivityIndicator, Alert
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, PenLine, BadgeCheck, Globe, Bell, Info, Shield, FileText, LogOut, ChevronRight } from 'lucide-react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import {
+  ArrowLeft, PenLine, BadgeCheck, Globe, Bell, Info, Shield, FileText, LogOut, ChevronRight, X, Check
+} from 'lucide-react-native';
 import { Colors, Spacing, BorderRadius } from '../constants/Theme';
 import { useLanguage } from '../store/LanguageContext';
 import { useAuth } from '../store/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
+import { getCaseStats, CaseStats } from '../services/caseService';
+import { updateProfile } from '../services/authService';
+
+const AVATARS = [
+  'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200', // Professional Man 1
+  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200', // Professional Woman 1
+  'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=200', // Professional Man 2
+  'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=200', // Professional Woman 2
+  'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&q=80&w=200', // Creative Man
+  'https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&q=80&w=200', // Creative Woman
+];
 
 export const ProfileScreen = () => {
   const { language, setLanguage, t } = useLanguage();
-  const { logout } = useAuth();
+  const { logout, user, updateUser } = useAuth();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [stats, setStats] = useState<CaseStats>({
+    total_cases: 0,
+    documents_generated: 0,
+    rights_analysed: 0,
+    cases_filed: 0
+  });
+
+  // Modal States
+  const [modalVisible, setModalVisible] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editCnic, setEditCnic] = useState('');
+  const [selectedAvatar, setSelectedAvatar] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+
+  const fetchProfileStats = async () => {
+    try {
+      const res = await getCaseStats();
+      if (res.ok && res.data) {
+        setStats(res.data);
+      }
+    } catch (err) {
+      console.error('[ProfileScreen] Error fetching profile stats:', err);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchProfileStats();
+    }, [])
+  );
+
+  const handleOpenEdit = () => {
+    setEditName(user?.name || '');
+    setEditPhone(user?.phone || '');
+    setEditCnic(user?.cnic || '');
+    setSelectedAvatar(user?.avatar_url || AVATARS[0]);
+    setValidationErrors({});
+    setModalVisible(true);
+  };
+
+  const formatCNIC = (text: string) => {
+    const clean = text.replace(/\D/g, '');
+    let formatted = clean;
+    if (clean.length > 5) {
+      formatted = `${clean.slice(0, 5)}-${clean.slice(5)}`;
+    }
+    if (clean.length > 12) {
+      formatted = `${clean.slice(0, 5)}-${clean.slice(5, 12)}-${clean.slice(12, 13)}`;
+    }
+    return formatted.slice(0, 15);
+  };
+
+  const validateProfile = (): boolean => {
+    const errs: Record<string, string> = {};
+    if (!editName.trim()) {
+      errs.name = 'Name is required';
+    }
+    if (editCnic.trim()) {
+      const cnicRegex = /^\d{5}-\d{7}-\d{1}$/;
+      if (!cnicRegex.test(editCnic.trim())) {
+        errs.cnic = 'CNIC must be in XXXXX-XXXXXXX-X format';
+      }
+    }
+    setValidationErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const handleSaveProfile = async () => {
+    if (!validateProfile()) return;
+    setSaving(true);
+    try {
+      const res = await updateProfile({
+        name: editName.trim(),
+        phone: editPhone.trim() || undefined,
+        cnic: editCnic.trim() || undefined,
+        avatar_url: selectedAvatar,
+      });
+
+      if (res.ok && res.data) {
+        await updateUser(res.data);
+        setModalVisible(false);
+        Alert.alert('Success', 'Profile updated successfully!');
+      } else {
+        Alert.alert('Error', res.error || 'Failed to update profile.');
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Something went wrong.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const memberSinceDate = user?.created_at 
+    ? new Date(user.created_at).toLocaleDateString(language === 'ur' ? 'ur-PK' : 'en-US', { month: 'long', year: 'numeric' })
+    : 'May 2026';
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -24,7 +138,7 @@ export const ProfileScreen = () => {
             <ArrowLeft color="#1A1A2E" size={24} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>{t('profile')}</Text>
-          <TouchableOpacity style={styles.headerIcon}>
+          <TouchableOpacity style={styles.headerIcon} onPress={handleOpenEdit}>
             <PenLine color="#1A1A2E" size={24} />
           </TouchableOpacity>
         </View>
@@ -33,30 +147,30 @@ export const ProfileScreen = () => {
         <View style={styles.profileSection}>
           <View style={styles.avatarContainer}>
             <Image 
-              source={{ uri: 'https://randomuser.me/api/portraits/men/32.jpg' }} 
+              source={{ uri: user?.avatar_url || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200' }} 
               style={styles.avatar} 
             />
             <View style={styles.badgeContainer}>
               <BadgeCheck color="#FFFFFF" fill="#0F7B46" size={24} />
             </View>
           </View>
-          <Text style={styles.nameText}>{t('user_name')}</Text>
-          <Text style={styles.emailText}>ahmed.khan@lawconnect.pk</Text>
-          <Text style={styles.memberText}>{t('member_since')} May 2026</Text>
+          <Text style={styles.nameText}>{user?.name || t('user_name')}</Text>
+          <Text style={styles.emailText}>{user?.email || 'user@example.com'}</Text>
+          <Text style={styles.memberText}>{t('member_since')} {memberSinceDate}</Text>
         </View>
 
         {/* Stats */}
         <View style={styles.statsRow}>
           <View style={styles.statBox}>
-            <Text style={styles.statNumber}>12</Text>
+            <Text style={styles.statNumber}>{stats.total_cases.toString().padStart(2, '0')}</Text>
             <Text style={styles.statLabel}>{t('cases')}</Text>
           </View>
           <View style={styles.statBox}>
-            <Text style={styles.statNumber}>45</Text>
+            <Text style={styles.statNumber}>{stats.documents_generated.toString().padStart(2, '0')}</Text>
             <Text style={styles.statLabel}>{t('documents')}</Text>
           </View>
           <View style={styles.statBox}>
-            <Text style={styles.statNumber}>08</Text>
+            <Text style={styles.statNumber}>{stats.rights_analysed.toString().padStart(2, '0')}</Text>
             <Text style={styles.statLabel}>{t('rights')}</Text>
           </View>
         </View>
@@ -137,6 +251,152 @@ export const ProfileScreen = () => {
         </TouchableOpacity>
 
       </ScrollView>
+
+      {/* Edit Profile Modal */}
+      <Modal
+        visible={modalVisible}
+        animationType="slide"
+        transparent={false}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.modalCloseBtn}>
+              <X color="#1A1A2E" size={24} />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Edit Profile</Text>
+            <TouchableOpacity onPress={handleSaveProfile} disabled={saving} style={styles.modalSaveBtn}>
+              {saving ? (
+                <ActivityIndicator size="small" color="#0F7B46" />
+              ) : (
+                <Check color="#0F7B46" size={24} />
+              )}
+            </TouchableOpacity>
+          </View>
+
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ flex: 1 }}
+          >
+            <ScrollView
+              contentContainerStyle={styles.modalScroll}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              {/* Avatar Picker Section */}
+              <Text style={styles.modalSectionLabel}>Choose an Avatar</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.avatarPickerScroll}
+              >
+                {AVATARS.map((uri) => {
+                  const isSelected = selectedAvatar === uri;
+                  return (
+                    <TouchableOpacity
+                      key={uri}
+                      style={[
+                        styles.avatarOptionWrapper,
+                        isSelected && styles.avatarOptionSelected,
+                      ]}
+                      onPress={() => setSelectedAvatar(uri)}
+                      activeOpacity={0.8}
+                    >
+                      <Image source={{ uri }} style={styles.avatarOptionImage} />
+                      {isSelected && (
+                        <View style={styles.avatarSelectedOverlay}>
+                          <Check color="#FFFFFF" size={14} strokeWidth={3} />
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+
+              {/* Form Fields */}
+              <View style={styles.modalForm}>
+                {/* Name */}
+                <Text style={styles.modalInputLabel}>Full Name</Text>
+                <View style={[styles.modalInputBox, validationErrors.name && styles.modalInputBoxError]}>
+                  <TextInput
+                    style={styles.modalTextInput}
+                    placeholder="Enter full name"
+                    placeholderTextColor="#8E8EA0"
+                    value={editName}
+                    onChangeText={(t) => {
+                      setEditName(t);
+                      if (validationErrors.name) {
+                        setValidationErrors((prev) => {
+                          const copy = { ...prev };
+                          delete copy.name;
+                          return copy;
+                        });
+                      }
+                    }}
+                    autoCapitalize="words"
+                  />
+                </View>
+                {validationErrors.name && (
+                  <Text style={styles.modalErrorText}>{validationErrors.name}</Text>
+                )}
+
+                {/* Phone */}
+                <Text style={[styles.modalInputLabel, { marginTop: Spacing.md }]}>Phone Number</Text>
+                <View style={styles.modalInputBox}>
+                  <TextInput
+                    style={styles.modalTextInput}
+                    placeholder="e.g. 03001234567"
+                    placeholderTextColor="#8E8EA0"
+                    value={editPhone}
+                    onChangeText={setEditPhone}
+                    keyboardType="phone-pad"
+                  />
+                </View>
+
+                {/* CNIC */}
+                <Text style={[styles.modalInputLabel, { marginTop: Spacing.md }]}>CNIC (optional)</Text>
+                <View style={[styles.modalInputBox, validationErrors.cnic && styles.modalInputBoxError]}>
+                  <TextInput
+                    style={styles.modalTextInput}
+                    placeholder="XXXXX-XXXXXXX-X"
+                    placeholderTextColor="#8E8EA0"
+                    value={editCnic}
+                    onChangeText={(t) => {
+                      setEditCnic(formatCNIC(t));
+                      if (validationErrors.cnic) {
+                        setValidationErrors((prev) => {
+                          const copy = { ...prev };
+                          delete copy.cnic;
+                          return copy;
+                        });
+                      }
+                    }}
+                    keyboardType="numeric"
+                    maxLength={15}
+                  />
+                </View>
+                {validationErrors.cnic && (
+                  <Text style={styles.modalErrorText}>{validationErrors.cnic}</Text>
+                )}
+              </View>
+
+              {/* Action Button */}
+              <TouchableOpacity
+                style={[styles.modalSubmitBtn, saving && { opacity: 0.7 }]}
+                onPress={handleSaveProfile}
+                disabled={saving}
+                activeOpacity={0.8}
+              >
+                {saving ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.modalSubmitBtnText}>Save Profile</Text>
+                )}
+              </TouchableOpacity>
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -307,5 +567,124 @@ const styles = StyleSheet.create({
     color: '#D32F2F',
     fontSize: 16,
     fontWeight: '600',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#FAF9F6',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E8E8E8',
+    backgroundColor: Colors.surface,
+  },
+  modalCloseBtn: {
+    padding: Spacing.xs,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1A1A2E',
+  },
+  modalSaveBtn: {
+    padding: Spacing.xs,
+  },
+  modalScroll: {
+    padding: Spacing.lg,
+    paddingBottom: Spacing.xxl,
+  },
+  modalSectionLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1A1A2E',
+    marginBottom: Spacing.md,
+  },
+  avatarPickerScroll: {
+    paddingVertical: Spacing.xs,
+    gap: Spacing.md,
+    marginBottom: Spacing.xl,
+  },
+  avatarOptionWrapper: {
+    position: 'relative',
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    padding: 2,
+  },
+  avatarOptionSelected: {
+    borderColor: '#0F7B46',
+  },
+  avatarOptionImage: {
+    width: 64,
+    height: 64,
+    borderRadius: 12,
+    backgroundColor: '#E8E8E2',
+  },
+  avatarSelectedOverlay: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    backgroundColor: '#0F7B46',
+    borderRadius: 9,
+    width: 18,
+    height: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+  modalForm: {
+    marginBottom: Spacing.xl,
+  },
+  modalInputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#5A5A7A',
+    marginBottom: 6,
+  },
+  modalInputBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 52,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1.5,
+    borderColor: '#E8E8E8',
+    backgroundColor: Colors.surface,
+    paddingHorizontal: Spacing.md,
+  },
+  modalInputBoxError: {
+    borderColor: '#ef4444',
+  },
+  modalTextInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#1A1A2E',
+    height: '100%',
+  },
+  modalErrorText: {
+    fontSize: 12,
+    color: '#ef4444',
+    marginTop: 4,
+  },
+  modalSubmitBtn: {
+    height: 54,
+    borderRadius: BorderRadius.md,
+    backgroundColor: '#0F7B46',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#0F7B46',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  modalSubmitBtnText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 });

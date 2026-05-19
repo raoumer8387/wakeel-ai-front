@@ -41,21 +41,51 @@ const PhoneIcon = () => (
   </Svg>
 );
 
+const CnicIcon = () => (
+  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+    <Path d="M3 5H21C22.1 5 23 5.9 23 7V17C23 18.1 22.1 19 21 19H3C1.9 19 1 18.1 1 17V7C1 5.9 1.9 5 3 5Z" stroke={Colors.textMuted} strokeWidth={1.8} fill="none" />
+    <Path d="M6 9H10" stroke={Colors.textMuted} strokeWidth={1.8} strokeLinecap="round" />
+    <Path d="M6 13H12" stroke={Colors.textMuted} strokeWidth={1.8} strokeLinecap="round" />
+    <Path d="M16 11C17.10 11 18 10.10 18 9C18 7.90 17.10 7 16 7C14.90 7 14 7.90 14 9C14 10.10 14.90 11 16 11Z" stroke={Colors.textMuted} strokeWidth={1.8} fill="none" />
+  </Svg>
+);
+
 export const RegisterScreen = ({ navigation }: any) => {
   const { register } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [cnic, setCnic] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const formatCNIC = (text: string) => {
+    const clean = text.replace(/\D/g, '');
+    let formatted = clean;
+    if (clean.length > 5) {
+      formatted = `${clean.slice(0, 5)}-${clean.slice(5)}`;
+    }
+    if (clean.length > 12) {
+      formatted = `${clean.slice(0, 5)}-${clean.slice(5, 12)}-${clean.slice(12, 13)}`;
+    }
+    return formatted.slice(0, 15);
+  };
 
   const validate = (): boolean => {
     const e: Record<string, string> = {};
     if (!name.trim()) e.name = 'Name is required';
     if (!email.trim()) e.email = 'Email is required';
     else if (!/\S+@\S+\.\S+/.test(email)) e.email = 'Enter a valid email';
+    
+    if (cnic.trim()) {
+      const cnicRegex = /^\d{5}-\d{7}-\d{1}$/;
+      if (!cnicRegex.test(cnic.trim())) {
+        e.cnic = 'CNIC must be in XXXXX-XXXXXXX-X format';
+      }
+    }
+
     if (!password) e.password = 'Password is required';
     else if (password.length < 8) e.password = 'At least 8 characters';
     setErrors(e);
@@ -68,6 +98,7 @@ export const RegisterScreen = ({ navigation }: any) => {
     try {
       const payload: any = { name: name.trim(), email: email.trim(), password };
       if (phone.trim()) payload.phone = phone.trim();
+      if (cnic.trim()) payload.cnic = cnic.trim();
       const result = await register(payload);
       if (!result.ok) Alert.alert('Registration Failed', result.error || 'Could not create account');
     } catch { Alert.alert('Error', 'Something went wrong.'); }
@@ -111,6 +142,25 @@ export const RegisterScreen = ({ navigation }: any) => {
               <PhoneIcon />
               <TextInput style={s.input} placeholder="+923001234567" placeholderTextColor={Colors.textMuted} value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
             </View>
+
+            {/* CNIC (optional) */}
+            <Text style={[s.label, { marginTop: Spacing.md }]}>CNIC <Text style={{ fontWeight: '400', color: Colors.textMuted }}>(optional)</Text></Text>
+            <View style={[s.inputBox, errors.cnic && s.inputErr]}>
+              <CnicIcon />
+              <TextInput 
+                style={s.input} 
+                placeholder="XXXXX-XXXXXXX-X" 
+                placeholderTextColor={Colors.textMuted} 
+                value={cnic} 
+                onChangeText={t => { 
+                  setCnic(formatCNIC(t)); 
+                  clearError('cnic'); 
+                }} 
+                keyboardType="numeric" 
+                maxLength={15}
+              />
+            </View>
+            {errors.cnic && <Text style={s.errTxt}>{errors.cnic}</Text>}
 
             {/* Password */}
             <Text style={[s.label, { marginTop: Spacing.md }]}>Password</Text>
