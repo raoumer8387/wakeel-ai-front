@@ -61,3 +61,9 @@ export const getDocumentDownloadUrl = async (docId: string): Promise<string> => 
   const baseUrl = ENV.API_BASE_URL.endsWith('/') ? ENV.API_BASE_URL.slice(0, -1) : ENV.API_BASE_URL;
   return `${baseUrl}/api/v1/documents/${docId}/download?token=${token}`;
 };
+
+export const createNewChat = async (): Promise<ApiResponse<{ case_id: string; status: string }>> => {
+  return authenticatedRequest<{ case_id: string; status: string }>('/api/v1/chat/new', {
+    method: 'POST',
+  });
+};

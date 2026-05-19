@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   View, 
   Text, 
@@ -6,9 +6,12 @@ import {
   ScrollView, 
   Image,
   TouchableOpacity,
-  StatusBar
+  StatusBar,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { 
   ArrowLeft, 
   Folder, 
@@ -20,9 +23,29 @@ import {
 } from 'lucide-react-native';
 import { Colors, Spacing, BorderRadius } from '../constants/Theme';
 import { useLanguage } from '../store/LanguageContext';
+import { createNewChat } from '../services/caseService';
 
 export const HomeScreen = () => {
   const { t } = useLanguage();
+  const navigation = useNavigation<any>();
+  const [creatingChat, setCreatingChat] = useState(false);
+
+  const handleNewConsultation = async () => {
+    if (creatingChat) return;
+    setCreatingChat(true);
+    try {
+      const res = await createNewChat();
+      if (res.ok && res.data?.case_id) {
+        navigation.navigate('Chat', { caseId: res.data.case_id });
+      } else {
+        Alert.alert('Error', res.error || 'Failed to create new consultation.');
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Something went wrong.');
+    } finally {
+      setCreatingChat(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -176,9 +199,13 @@ export const HomeScreen = () => {
       </ScrollView>
 
       {/* Floating Action Button */}
-      <TouchableOpacity style={styles.fab}>
-        <Plus color={Colors.surface} size={20} />
-        <Text style={styles.fabText}>{t('new_consultation')}</Text>
+      <TouchableOpacity style={[styles.fab, creatingChat && { opacity: 0.6 }]} onPress={handleNewConsultation} disabled={creatingChat}>
+        {creatingChat ? (
+          <ActivityIndicator size={20} color={Colors.surface} />
+        ) : (
+          <Plus color={Colors.surface} size={20} />
+        )}
+        <Text style={styles.fabText}>{creatingChat ? 'Creating...' : t('new_consultation')}</Text>
       </TouchableOpacity>
     </SafeAreaView>
   );
