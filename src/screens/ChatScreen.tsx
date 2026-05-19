@@ -26,6 +26,11 @@ import { Colors, Spacing, BorderRadius } from '../constants/Theme';
 import { useLanguage } from '../store/LanguageContext';
 import { streamChatQuery } from '../services/legalService';
 import { getCaseMessages, getCaseDocuments, getDocumentDownloadUrl } from '../services/caseService';
+import { Audio } from 'expo-av';
+import * as FileSystem from 'expo-file-system';
+import { getAccessToken } from '../services/api';
+import { transcribeAudioFile } from '../services/whisperApi';
+import { ENV } from '../config/env';
 
 type SenderType = 'user' | 'agent1' | 'agent2';
 
@@ -63,6 +68,8 @@ export const ChatScreen = ({ navigation, route }: any) => {
   const [caseId, setCaseId] = useState<string | null>(route?.params?.caseId || null);
   const caseIdRef = useRef<string | null>(route?.params?.caseId || null);
   const flatListRef = useRef<FlatList>(null);
+  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
 
   useEffect(() => {
     if (caseId) {
@@ -121,6 +128,69 @@ export const ChatScreen = ({ navigation, route }: any) => {
       setIsTyping(false);
     } catch (err) {
       console.error("Failed to load case data:", err);
+      setIsTyping(false);
+    }
+  };
+
+  const startRecording = async () => {
+    try {
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status !== 'granted') return;
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      const { recording: newRecording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+      setRecording(newRecording);
+      setIsRecording(true);
+    } catch (err) {
+      console.error('Failed to start recording', err);
+    }
+  };
+
+  const stopRecording = async () => {
+    try {
+      if (!recording) return;
+      setIsRecording(false);
+      await recording.stopAndUnloadAsync();
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+      });
+      const uri = recording.getURI();
+      setRecording(null);
+
+      if (uri) {
+        await transcribeAudio(uri);
+      }
+    } catch (err) {
+      console.error('Failed to stop recording', err);
+    }
+  };
+
+  const toggleRecording = () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  };
+
+  const transcribeAudio = async (uri: string) => {
+    try {
+      setIsTyping(true);
+      setTypingLabel('Transcribing audio...');
+
+      const text = await transcribeAudioFile(uri);
+      
+      setInputText(prev => prev + (prev ? ' ' : '') + text);
+    } catch (error: any) {
+      console.error('Transcription error:', error);
+      alert(error.message || 'Error connecting to transcription service.');
+    } finally {
       setIsTyping(false);
     }
   };
@@ -481,8 +551,8 @@ export const ChatScreen = ({ navigation, route }: any) => {
         )}
 
         <View style={styles.inputContainer}>
-          <TouchableOpacity style={styles.micButton}>
-            <Mic color={Colors.textSecondary} size={24} />
+          <TouchableOpacity style={[styles.micButton, isRecording && styles.micButtonActive]} onPress={toggleRecording}>
+            <Mic color={isRecording ? Colors.surface : Colors.textSecondary} size={24} />
           </TouchableOpacity>
           <View style={styles.inputWrapper}>
             <TextInput
@@ -750,6 +820,10 @@ const styles = StyleSheet.create({
   },
   micButton: {
     padding: 10,
+    borderRadius: 24,
+  },
+  micButtonActive: {
+    backgroundColor: 'red',
   },
   inputWrapper: {
     flex: 1,
