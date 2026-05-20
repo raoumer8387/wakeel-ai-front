@@ -28,8 +28,8 @@ const AVATARS = [
 export const ProfileScreen = () => {
   const { language, setLanguage, t } = useLanguage();
   const isRTL = language === 'ur';
-  const rtlRow = isRTL ? { flexDirection: 'row-reverse' as const } : {};
-  const rtlText = isRTL ? { textAlign: 'right' as const } : {};
+  const rtlRow = isRTL ? { flexDirection: 'row-reverse' as const } : { flexDirection: 'row' as const };
+  const rtlText = isRTL ? { textAlign: 'right' as const } : { textAlign: 'left' as const };
   const { logout, user, updateUser } = useAuth();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
