@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ENV } from '../config/env';
-
 const BASE_URL = ENV.API_BASE_URL;
+
+
 
 // ─── Storage Keys ───────────────────────────────────────────────────
 export const STORAGE_KEYS = {
@@ -70,7 +71,7 @@ export const apiRequest = async <T = unknown>(
   try {
     const cleanBaseUrl = BASE_URL.endsWith('/') ? BASE_URL.slice(0, -1) : BASE_URL;
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-    
+
     const targetUrl = `${cleanBaseUrl}${cleanEndpoint}`;
     console.log(`[API] Fetching: ${method} ${targetUrl}`);
 
@@ -80,7 +81,9 @@ export const apiRequest = async <T = unknown>(
       body: body ? JSON.stringify(body) : undefined,
     });
 
-    const data = await response.json().catch(() => null);
+    const contentType = response.headers.get('content-type') || '';
+    const isJson = contentType.includes('application/json');
+    const data = isJson ? await response.json().catch(() => null) : null;
 
     if (!response.ok) {
       console.log(`[API] Error ${response.status}:`, data);
@@ -88,6 +91,15 @@ export const apiRequest = async <T = unknown>(
         ok: false,
         status: response.status,
         error: data?.detail || `Request failed with status ${response.status}`,
+      };
+    }
+
+    if (response.status !== 204 && !isJson) {
+      console.log(`[API] Expected JSON response but received content-type "${contentType}"`);
+      return {
+        ok: false,
+        status: response.status,
+        error: 'Invalid server response format. Expected JSON.',
       };
     }
 

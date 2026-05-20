@@ -1,5 +1,6 @@
-import { apiRequest, authenticatedRequest, saveTokens, clearTokens, STORAGE_KEYS } from './api';
+import { apiRequest, authenticatedRequest, saveTokens, clearTokens, STORAGE_KEYS, getAccessToken } from './api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ENV } from '../config/env';
 
 // ─── Types ──────────────────────────────────────────────────────────
 
@@ -10,6 +11,7 @@ export interface AuthUser {
   phone: string | null;
   cnic: string | null;
   avatar_url: string | null;
+  address: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -40,6 +42,7 @@ export interface ProfileUpdatePayload {
   phone?: string;
   cnic?: string;
   avatar_url?: string;
+  address?: string;
 }
 
 // ─── Auth API Calls ─────────────────────────────────────────────────
@@ -137,4 +140,58 @@ export const getStoredUser = async (): Promise<AuthUser | null> => {
     }
   }
   return null;
+};
+
+/**
+ * Upload custom avatar image file to backend.
+ */
+export const uploadAvatarFile = async (uri: string) => {
+  const formData = new FormData();
+  
+  const filename = uri.split('/').pop() || 'avatar.jpg';
+  const match = /\.(\w+)$/.exec(filename);
+  const type = match ? `image/${match[1]}` : `image/jpeg`;
+  
+  formData.append('file', {
+    uri,
+    name: filename,
+    type,
+  } as any);
+  
+  const token = await getAccessToken();
+  
+  const cleanBaseUrl = ENV.API_BASE_URL.endsWith('/') ? ENV.API_BASE_URL.slice(0, -1) : ENV.API_BASE_URL;
+  const targetUrl = `${cleanBaseUrl}/api/v1/auth/upload-avatar`;
+  console.log(`[API] Uploading image to: ${targetUrl}`);
+
+  const response = await fetch(targetUrl, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Accept': 'application/json',
+    },
+    body: formData,
+  });
+  
+  const data = await response.json().catch(() => null);
+  
+  if (!response.ok) {
+    console.log(`[API] Upload Error ${response.status}:`, data);
+    return {
+      ok: false,
+      status: response.status,
+      error: data?.detail || `Upload failed with status ${response.status}`,
+    };
+  }
+  
+  console.log(`[API] Upload Success ${response.status}`);
+  if (data) {
+    await AsyncStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(data));
+  }
+  
+  return {
+    ok: true,
+    status: response.status,
+    data: data as AuthUser,
+  };
 };

@@ -26,6 +26,7 @@ import {
 import { Colors, Spacing, BorderRadius } from '../constants/Theme';
 import { useLanguage } from '../store/LanguageContext';
 import { useAuth } from '../store/AuthContext';
+import { ENV } from '../config/env';
 import { 
   createNewChat, 
   getCaseStats, 
@@ -41,6 +42,37 @@ export const HomeScreen = () => {
   const isUrdu = language === 'ur';
   const navigation = useNavigation<any>();
   const { user } = useAuth();
+  
+  const getAvatarUri = (url: string | null | undefined) => {
+    if (!url) return null;
+    if (url.startsWith('/static')) {
+      const cleanBaseUrl = ENV.API_BASE_URL.endsWith('/') ? ENV.API_BASE_URL.slice(0, -1) : ENV.API_BASE_URL;
+      return `${cleanBaseUrl}${url}`;
+    }
+    return url;
+  };
+  
+  const renderHomeAvatar = () => {
+    const uri = getAvatarUri(user?.avatar_url);
+    if (uri) {
+      return (
+        <Image 
+          source={{ uri }} 
+          style={styles.avatar} 
+        />
+      );
+    }
+    
+    const initials = user?.name
+      ? user.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()
+      : 'U';
+      
+    return (
+      <View style={[styles.avatar, styles.homeInitialsAvatar]}>
+        <Text style={styles.homeInitialsText}>{initials}</Text>
+      </View>
+    );
+  };
   
   const [creatingChat, setCreatingChat] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -122,10 +154,7 @@ export const HomeScreen = () => {
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Wakeel-AI</Text>
         </View>
-        <Image 
-          source={{ uri: user?.avatar_url || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200' }} 
-          style={styles.avatar} 
-        />
+        {renderHomeAvatar()}
       </View>
 
       {loading && !refreshing ? (
@@ -581,5 +610,15 @@ const styles = StyleSheet.create({
   },
   rtlTextContainer: {
     alignItems: 'flex-end',
+  },
+  homeInitialsAvatar: {
+    backgroundColor: '#0F7B46',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  homeInitialsText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

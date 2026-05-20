@@ -79,7 +79,13 @@ export const RegisterScreen = ({ navigation }: any) => {
     if (!email.trim()) e.email = 'Email is required';
     else if (!/\S+@\S+\.\S+/.test(email)) e.email = 'Enter a valid email';
     
-    if (cnic.trim()) {
+    if (!phone.trim()) {
+      e.phone = 'Phone number is required';
+    }
+
+    if (!cnic.trim()) {
+      e.cnic = 'CNIC is required';
+    } else {
       const cnicRegex = /^\d{5}-\d{7}-\d{1}$/;
       if (!cnicRegex.test(cnic.trim())) {
         e.cnic = 'CNIC must be in XXXXX-XXXXXXX-X format';
@@ -96,9 +102,13 @@ export const RegisterScreen = ({ navigation }: any) => {
     if (!validate()) return;
     setLoading(true);
     try {
-      const payload: any = { name: name.trim(), email: email.trim(), password };
-      if (phone.trim()) payload.phone = phone.trim();
-      if (cnic.trim()) payload.cnic = cnic.trim();
+      const payload = { 
+        name: name.trim(), 
+        email: email.trim(), 
+        password,
+        phone: phone.trim(),
+        cnic: cnic.trim()
+      };
       const result = await register(payload);
       if (!result.ok) Alert.alert('Registration Failed', result.error || 'Could not create account');
     } catch { Alert.alert('Error', 'Something went wrong.'); }
@@ -136,15 +146,16 @@ export const RegisterScreen = ({ navigation }: any) => {
             </View>
             {errors.email && <Text style={s.errTxt}>{errors.email}</Text>}
 
-            {/* Phone (optional) */}
-            <Text style={[s.label, { marginTop: Spacing.md }]}>Phone <Text style={{ fontWeight: '400', color: Colors.textMuted }}>(optional)</Text></Text>
-            <View style={s.inputBox}>
+            {/* Phone */}
+            <Text style={[s.label, { marginTop: Spacing.md }]}>Phone Number</Text>
+            <View style={[s.inputBox, errors.phone && s.inputErr]}>
               <PhoneIcon />
-              <TextInput style={s.input} placeholder="+923001234567" placeholderTextColor={Colors.textMuted} value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+              <TextInput style={s.input} placeholder="+923001234567" placeholderTextColor={Colors.textMuted} value={phone} onChangeText={t => { setPhone(t); clearError('phone'); }} keyboardType="phone-pad" />
             </View>
+            {errors.phone && <Text style={s.errTxt}>{errors.phone}</Text>}
 
-            {/* CNIC (optional) */}
-            <Text style={[s.label, { marginTop: Spacing.md }]}>CNIC <Text style={{ fontWeight: '400', color: Colors.textMuted }}>(optional)</Text></Text>
+            {/* CNIC */}
+            <Text style={[s.label, { marginTop: Spacing.md }]}>CNIC</Text>
             <View style={[s.inputBox, errors.cnic && s.inputErr]}>
               <CnicIcon />
               <TextInput 

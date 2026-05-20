@@ -56,5 +56,19 @@
   "cases_download_failed": "Failed to initiate document download.",
   "cases_api_title": "Wakeel Orchestrator API Console",
   "cases_api_desc": "Explore backend orchestrator specs, JSON models, and stream states. All endpoints require authentication via Bearer Tokens automatically handled by the Wakeel Auth Provider.",
-  "cases_api_section": "REST & SSE Endpoints"
+  "cases_api_section": "REST & SSE Endpoints",
+  "profile details": "Profile Details",
+  "edit profile": "Edit Profile",
+  "save profile": "Save Profile",
+  "full name": "Full Name",
+  "phone number": "Phone Number",
+  "cnic": "CNIC",
+  "address": "Address",
+  "upload photo": "Upload Photo",
+  "choose an avatar": "Choose an Avatar",
+  "uploading": "Uploading...",
+  "profile uploaded successfully": "Profile uploaded successfully!",
+  "failed to upload profile": "Failed to upload profile.",
+  "error": "Error",
+  "success": "Success"
 }

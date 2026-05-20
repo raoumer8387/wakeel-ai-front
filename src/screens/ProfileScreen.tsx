@@ -6,7 +6,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import {
-  ArrowLeft, PenLine, BadgeCheck, Globe, Bell, Info, Shield, FileText, LogOut, ChevronRight, X, Check
+  ArrowLeft, PenLine, BadgeCheck, Globe, Bell, Info, Shield, FileText, LogOut, ChevronRight, X, Check,
+  MapPin, Camera, Upload, Phone, CreditCard
 } from 'lucide-react-native';
 import { Colors, Spacing, BorderRadius } from '../constants/Theme';
 import { useLanguage } from '../store/LanguageContext';
@@ -15,19 +16,20 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { getCaseStats, CaseStats } from '../services/caseService';
-import { updateProfile } from '../services/authService';
+import { updateProfile, uploadAvatarFile } from '../services/authService';
+import * as ImagePicker from 'expo-image-picker';
+import { ENV } from '../config/env';
 
 const AVATARS = [
-  'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200', // Professional Man 1
-  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200', // Professional Woman 1
-  'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=200', // Professional Man 2
-  'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=200', // Professional Woman 2
-  'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&q=80&w=200', // Creative Man
-  'https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&q=80&w=200', // Creative Woman
+  'default_male',
+  'default_female',
 ];
 
 export const ProfileScreen = () => {
   const { language, setLanguage, t } = useLanguage();
+  const isRTL = language === 'ur';
+  const rtlRow = isRTL ? { flexDirection: 'row-reverse' as const } : {};
+  const rtlText = isRTL ? { textAlign: 'right' as const } : {};
   const { logout, user, updateUser } = useAuth();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
@@ -43,9 +45,47 @@ export const ProfileScreen = () => {
   const [editName, setEditName] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [editCnic, setEditCnic] = useState('');
+  const [editAddress, setEditAddress] = useState('');
   const [selectedAvatar, setSelectedAvatar] = useState('');
   const [saving, setSaving] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+
+  const getAvatarUri = (url: string | null | undefined) => {
+    if (!url) return null;
+    if (url.startsWith('/static')) {
+      const cleanBaseUrl = ENV.API_BASE_URL.endsWith('/') ? ENV.API_BASE_URL.slice(0, -1) : ENV.API_BASE_URL;
+      return `${cleanBaseUrl}${url}`;
+    }
+    return url;
+  };
+
+  const renderAvatar = (url: string | null | undefined, size: number = 96, style: any = styles.avatar) => {
+    if (url === 'default_male') {
+      return <Image source={require('../../assets/ava_male.jpg')} style={[style, { width: size, height: size, borderRadius: size * 0.25 }]} />;
+    }
+    if (url === 'default_female') {
+      return <Image source={require('../../assets/ava_female.jpg')} style={[style, { width: size, height: size, borderRadius: size * 0.25 }]} />;
+    }
+
+    const uri = getAvatarUri(url);
+    if (uri) {
+      return (
+        <Image
+          source={{ uri }}
+          style={style}
+        />
+      );
+    }
+
+    // Default avatar fallback
+    return (
+      <Image
+        source={require('../../assets/ava_male.jpg')}
+        style={[style, { width: size, height: size, borderRadius: size * 0.25 }]}
+      />
+    );
+  };
 
   const fetchProfileStats = async () => {
     try {
@@ -68,6 +108,7 @@ export const ProfileScreen = () => {
     setEditName(user?.name || '');
     setEditPhone(user?.phone || '');
     setEditCnic(user?.cnic || '');
+    setEditAddress(user?.address || '');
     setSelectedAvatar(user?.avatar_url || AVATARS[0]);
     setValidationErrors({});
     setModalVisible(true);
@@ -88,12 +129,12 @@ export const ProfileScreen = () => {
   const validateProfile = (): boolean => {
     const errs: Record<string, string> = {};
     if (!editName.trim()) {
-      errs.name = 'Name is required';
+      errs.name = t('name_required');
     }
     if (editCnic.trim()) {
       const cnicRegex = /^\d{5}-\d{7}-\d{1}$/;
       if (!cnicRegex.test(editCnic.trim())) {
-        errs.cnic = 'CNIC must be in XXXXX-XXXXXXX-X format';
+        errs.cnic = t('cnic_invalid');
       }
     }
     setValidationErrors(errs);
@@ -109,23 +150,67 @@ export const ProfileScreen = () => {
         phone: editPhone.trim() || undefined,
         cnic: editCnic.trim() || undefined,
         avatar_url: selectedAvatar,
+        address: editAddress.trim() || undefined,
       });
 
       if (res.ok && res.data) {
         await updateUser(res.data);
         setModalVisible(false);
-        Alert.alert('Success', 'Profile updated successfully!');
+        Alert.alert(t('success'), t('profile_updated'));
       } else {
-        Alert.alert('Error', res.error || 'Failed to update profile.');
+        Alert.alert(t('error'), res.error || t('failed_update'));
       }
     } catch (err: any) {
-      Alert.alert('Error', err.message || 'Something went wrong.');
+      Alert.alert(t('error'), err.message || 'Something went wrong.');
     } finally {
       setSaving(false);
     }
   };
 
-  const memberSinceDate = user?.created_at 
+  const handlePickImage = async () => {
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permissionResult.granted) {
+      Alert.alert(t('permission_denied'), t('permission_denied_desc'));
+      return;
+    }
+
+    const pickerResult = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (pickerResult.canceled) return;
+
+    const asset = pickerResult.assets[0];
+
+    // Check if image size exceeds 2MB (2 * 1024 * 1024 bytes)
+    if (asset.fileSize && asset.fileSize > 2097152) {
+      Alert.alert(t('size_limit_exceeded'), t('size_limit_desc'));
+      return;
+    }
+
+    const pickedUri = asset.uri;
+
+    setUploadingAvatar(true);
+    try {
+      const uploadResult = await uploadAvatarFile(pickedUri);
+      if (uploadResult.ok && uploadResult.data) {
+        await updateUser(uploadResult.data);
+        setSelectedAvatar(uploadResult.data.avatar_url || '');
+        Alert.alert(t('success'), t('profile uploaded successfully'));
+      } else {
+        Alert.alert(t('error'), uploadResult.error || t('failed to upload profile'));
+      }
+    } catch (err: any) {
+      Alert.alert(t('error'), err.message || t('image_upload_failed'));
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  const memberSinceDate = user?.created_at
     ? new Date(user.created_at).toLocaleDateString(language === 'ur' ? 'ur-PK' : 'en-US', { month: 'long', year: 'numeric' })
     : 'May 2026';
 
@@ -133,9 +218,9 @@ export const ProfileScreen = () => {
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, rtlRow]}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerIcon}>
-            <ArrowLeft color="#1A1A2E" size={24} />
+            <ArrowLeft color="#1A1A2E" size={24} style={isRTL ? { transform: [{ rotate: '180deg' }] } : {}} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>{t('profile')}</Text>
           <TouchableOpacity style={styles.headerIcon} onPress={handleOpenEdit}>
@@ -146,10 +231,7 @@ export const ProfileScreen = () => {
         {/* Profile Info */}
         <View style={styles.profileSection}>
           <View style={styles.avatarContainer}>
-            <Image 
-              source={{ uri: user?.avatar_url || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200' }} 
-              style={styles.avatar} 
-            />
+            {renderAvatar(user?.avatar_url, 96, styles.avatar)}
             <View style={styles.badgeContainer}>
               <BadgeCheck color="#FFFFFF" fill="#0F7B46" size={24} />
             </View>
@@ -160,7 +242,7 @@ export const ProfileScreen = () => {
         </View>
 
         {/* Stats */}
-        <View style={styles.statsRow}>
+        <View style={[styles.statsRow, rtlRow]}>
           <View style={styles.statBox}>
             <Text style={styles.statNumber}>{stats.total_cases.toString().padStart(2, '0')}</Text>
             <Text style={styles.statLabel}>{t('cases')}</Text>
@@ -175,25 +257,59 @@ export const ProfileScreen = () => {
           </View>
         </View>
 
-        {/* Preferences */}
-        <Text style={styles.sectionHeader}>{t('preferences')}</Text>
+        {/* Profile Details */}
+        <Text style={[styles.sectionHeader, rtlText]}>{t('profile details')}</Text>
         <View style={styles.card}>
-          <View style={[styles.row, styles.borderBottom]}>
-            <View style={styles.rowLeft}>
-              <Globe color="#1A1A2E" size={22} />
+          <View style={[styles.row, styles.borderBottom, rtlRow]}>
+            <View style={[styles.rowLeft, rtlRow]}>
+              <Phone color="#1A1A2E" size={22} />
               <View>
-                <Text style={styles.rowTitle}>{t('language')}</Text>
-                <Text style={styles.rowSubtitle}>{t('urdu_english')}</Text>
+                <Text style={[styles.rowTitle, rtlText]}>{t('phone_number')}</Text>
+                <Text style={[styles.rowSubtitle, rtlText]}>{user?.phone || t('not_provided')}</Text>
               </View>
             </View>
-            <View style={styles.languageToggle}>
-              <TouchableOpacity 
+          </View>
+
+          <View style={[styles.row, styles.borderBottom, rtlRow]}>
+            <View style={[styles.rowLeft, rtlRow]}>
+              <CreditCard color="#1A1A2E" size={22} />
+              <View>
+                <Text style={[styles.rowTitle, rtlText]}>{t('cnic')}</Text>
+                <Text style={[styles.rowSubtitle, rtlText]}>{user?.cnic || t('not_provided')}</Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={[styles.row, rtlRow]}>
+            <View style={[styles.rowLeft, rtlRow]}>
+              <MapPin color="#1A1A2E" size={22} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.rowTitle, rtlText]}>{t('address')}</Text>
+                <Text style={[styles.rowSubtitle, rtlText]} numberOfLines={2}>{user?.address || t('not_provided')}</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Preferences */}
+        <Text style={[styles.sectionHeader, rtlText]}>{t('preferences')}</Text>
+        <View style={styles.card}>
+          <View style={[styles.row, styles.borderBottom, rtlRow]}>
+            <View style={[styles.rowLeft, rtlRow]}>
+              <Globe color="#1A1A2E" size={22} />
+              <View>
+                <Text style={[styles.rowTitle, rtlText]}>{t('language')}</Text>
+                <Text style={[styles.rowSubtitle, rtlText]}>{t('urdu_english')}</Text>
+              </View>
+            </View>
+            <View style={[styles.languageToggle, rtlRow]}>
+              <TouchableOpacity
                 style={[styles.langBtn, language === 'en' && styles.langBtnActive]}
                 onPress={() => setLanguage('en')}
               >
                 <Text style={[styles.langText, language === 'en' && styles.langTextActive]}>EN</Text>
               </TouchableOpacity>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.langBtn, language === 'ur' && styles.langBtnActive]}
                 onPress={() => setLanguage('ur')}
               >
@@ -201,11 +317,11 @@ export const ProfileScreen = () => {
               </TouchableOpacity>
             </View>
           </View>
-          
-          <View style={styles.row}>
-            <View style={styles.rowLeft}>
+
+          <View style={[styles.row, rtlRow]}>
+            <View style={[styles.rowLeft, rtlRow]}>
               <Bell color="#1A1A2E" size={22} />
-              <Text style={styles.rowTitle}>{t('notifications')}</Text>
+              <Text style={[styles.rowTitle, rtlText]}>{t('notifications')}</Text>
             </View>
             <Switch
               value={notificationsEnabled}
@@ -217,37 +333,37 @@ export const ProfileScreen = () => {
         </View>
 
         {/* Legal Info */}
-        <Text style={styles.sectionHeader}>{t('legal_info')}</Text>
+        <Text style={[styles.sectionHeader, rtlText]}>{t('legal_info')}</Text>
         <View style={styles.card}>
-          <TouchableOpacity style={[styles.row, styles.borderBottom]} onPress={() => navigation.navigate('About')}>
-            <View style={styles.rowLeft}>
+          <TouchableOpacity style={[styles.row, styles.borderBottom, rtlRow]} onPress={() => navigation.navigate('About')}>
+            <View style={[styles.rowLeft, rtlRow]}>
               <Info color="#1A1A2E" size={22} />
-              <Text style={styles.rowTitle}>{t('about wakeel-ai')}</Text>
+              <Text style={[styles.rowTitle, rtlText]}>{t('about wakeel-ai')}</Text>
             </View>
-            <ChevronRight color="#BDBDBD" size={20} />
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={[styles.row, styles.borderBottom]} onPress={() => navigation.navigate('PrivacyPolicy')}>
-            <View style={styles.rowLeft}>
-              <Shield color="#1A1A2E" size={22} />
-              <Text style={styles.rowTitle}>{t('privacy policy')}</Text>
-            </View>
-            <ChevronRight color="#BDBDBD" size={20} />
+            <ChevronRight color="#BDBDBD" size={20} style={isRTL ? { transform: [{ rotate: '180deg' }] } : {}} />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.row} onPress={() => navigation.navigate('TermsOfService')}>
-            <View style={styles.rowLeft}>
-              <FileText color="#1A1A2E" size={22} />
-              <Text style={styles.rowTitle}>{t('terms of service')}</Text>
+          <TouchableOpacity style={[styles.row, styles.borderBottom, rtlRow]} onPress={() => navigation.navigate('PrivacyPolicy')}>
+            <View style={[styles.rowLeft, rtlRow]}>
+              <Shield color="#1A1A2E" size={22} />
+              <Text style={[styles.rowTitle, rtlText]}>{t('privacy policy')}</Text>
             </View>
-            <ChevronRight color="#BDBDBD" size={20} />
+            <ChevronRight color="#BDBDBD" size={20} style={isRTL ? { transform: [{ rotate: '180deg' }] } : {}} />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={[styles.row, rtlRow]} onPress={() => navigation.navigate('TermsOfService')}>
+            <View style={[styles.rowLeft, rtlRow]}>
+              <FileText color="#1A1A2E" size={22} />
+              <Text style={[styles.rowTitle, rtlText]}>{t('terms of service')}</Text>
+            </View>
+            <ChevronRight color="#BDBDBD" size={20} style={isRTL ? { transform: [{ rotate: '180deg' }] } : {}} />
           </TouchableOpacity>
         </View>
 
         {/* Sign Out */}
-        <TouchableOpacity style={styles.signOutButton} onPress={logout}>
+        <TouchableOpacity style={[styles.signOutButton, rtlRow]} onPress={logout}>
           <LogOut color="#D32F2F" size={22} />
-          <Text style={styles.signOutText}>{t('sign out')}</Text>
+          <Text style={[styles.signOutText, rtlText]}>{t('sign out')}</Text>
         </TouchableOpacity>
 
       </ScrollView>
@@ -260,11 +376,11 @@ export const ProfileScreen = () => {
         onRequestClose={() => setModalVisible(false)}
       >
         <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
+          <View style={[styles.modalHeader, rtlRow]}>
             <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.modalCloseBtn}>
               <X color="#1A1A2E" size={24} />
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>Edit Profile</Text>
+            <Text style={styles.modalTitle}>{t('edit profile')}</Text>
             <TouchableOpacity onPress={handleSaveProfile} disabled={saving} style={styles.modalSaveBtn}>
               {saving ? (
                 <ActivityIndicator size="small" color="#0F7B46" />
@@ -283,44 +399,82 @@ export const ProfileScreen = () => {
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
             >
+              {/* Custom Image Picker Section */}
+              <View style={styles.imagePickerSection}>
+                <TouchableOpacity
+                  style={styles.imagePickerBox}
+                  onPress={handlePickImage}
+                  disabled={uploadingAvatar}
+                  activeOpacity={0.8}
+                >
+                  {uploadingAvatar ? (
+                    <View style={styles.imagePickerInner}>
+                      <ActivityIndicator size="small" color="#0F7B46" />
+                      <Text style={styles.imagePickerText}>{t('uploading')}</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.imagePickerInner}>
+                      {selectedAvatar ? (
+                        <Image source={{ uri: getAvatarUri(selectedAvatar) || '' }} style={styles.imagePickerBoxImage} />
+                      ) : (
+                        <Image source={require('../../assets/icon.png')} style={styles.imagePickerBoxImage} />
+                      )}
+                      <View style={styles.cameraIconBadge}>
+                        <Camera color="#FFFFFF" size={14} strokeWidth={2.5} />
+                      </View>
+                      <Text style={styles.imagePickerText}>{t('upload photo')}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </View>
+
               {/* Avatar Picker Section */}
-              <Text style={styles.modalSectionLabel}>Choose an Avatar</Text>
+              <Text style={[styles.modalSectionLabel, rtlText]}>{t('choose an avatar')}</Text>
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.avatarPickerScroll}
               >
-                {AVATARS.map((uri) => {
-                  const isSelected = selectedAvatar === uri;
-                  return (
-                    <TouchableOpacity
-                      key={uri}
-                      style={[
-                        styles.avatarOptionWrapper,
-                        isSelected && styles.avatarOptionSelected,
-                      ]}
-                      onPress={() => setSelectedAvatar(uri)}
-                      activeOpacity={0.8}
-                    >
-                      <Image source={{ uri }} style={styles.avatarOptionImage} />
-                      {isSelected && (
-                        <View style={styles.avatarSelectedOverlay}>
-                          <Check color="#FFFFFF" size={14} strokeWidth={3} />
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
+                {(() => {
+                  const avatarOptions = [...AVATARS];
+                  if (selectedAvatar && !AVATARS.includes(selectedAvatar)) {
+                    avatarOptions.unshift(selectedAvatar);
+                  }
+
+                  return avatarOptions.map((uri) => {
+                    const isSelected = selectedAvatar === uri;
+                    const avatarUri = getAvatarUri(uri);
+
+                    return (
+                      <TouchableOpacity
+                        key={uri}
+                        style={[
+                          styles.avatarOptionWrapper,
+                          isSelected && styles.avatarOptionSelected,
+                        ]}
+                        onPress={() => setSelectedAvatar(uri)}
+                        activeOpacity={0.8}
+                      >
+                        {renderAvatar(uri, 64, styles.avatarOptionImage)}
+                        {isSelected && (
+                          <View style={styles.avatarSelectedOverlay}>
+                            <Check color="#FFFFFF" size={14} strokeWidth={3} />
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  });
+                })()}
               </ScrollView>
 
               {/* Form Fields */}
               <View style={styles.modalForm}>
                 {/* Name */}
-                <Text style={styles.modalInputLabel}>Full Name</Text>
-                <View style={[styles.modalInputBox, validationErrors.name && styles.modalInputBoxError]}>
+                <Text style={[styles.modalInputLabel, rtlText]}>{t('full name')}</Text>
+                <View style={[styles.modalInputBox, rtlRow, validationErrors.name && styles.modalInputBoxError]}>
                   <TextInput
-                    style={styles.modalTextInput}
-                    placeholder="Enter full name"
+                    style={[styles.modalTextInput, rtlText]}
+                    placeholder={t('enter_full_name')}
                     placeholderTextColor="#8E8EA0"
                     value={editName}
                     onChangeText={(t) => {
@@ -337,15 +491,15 @@ export const ProfileScreen = () => {
                   />
                 </View>
                 {validationErrors.name && (
-                  <Text style={styles.modalErrorText}>{validationErrors.name}</Text>
+                  <Text style={[styles.modalErrorText, rtlText]}>{validationErrors.name}</Text>
                 )}
 
                 {/* Phone */}
-                <Text style={[styles.modalInputLabel, { marginTop: Spacing.md }]}>Phone Number</Text>
-                <View style={styles.modalInputBox}>
+                <Text style={[styles.modalInputLabel, rtlText, { marginTop: Spacing.md }]}>{t('phone_number')}</Text>
+                <View style={[styles.modalInputBox, rtlRow]}>
                   <TextInput
-                    style={styles.modalTextInput}
-                    placeholder="e.g. 03001234567"
+                    style={[styles.modalTextInput, rtlText]}
+                    placeholder={t('eg_phone')}
                     placeholderTextColor="#8E8EA0"
                     value={editPhone}
                     onChangeText={setEditPhone}
@@ -354,30 +508,33 @@ export const ProfileScreen = () => {
                 </View>
 
                 {/* CNIC */}
-                <Text style={[styles.modalInputLabel, { marginTop: Spacing.md }]}>CNIC (optional)</Text>
-                <View style={[styles.modalInputBox, validationErrors.cnic && styles.modalInputBoxError]}>
+                <Text style={[styles.modalInputLabel, rtlText, { marginTop: Spacing.md }]}>{t('cnic')}</Text>
+                <View style={[styles.modalInputBox, rtlRow, styles.modalInputBoxDisabled]}>
                   <TextInput
-                    style={styles.modalTextInput}
+                    style={[styles.modalTextInput, rtlText, styles.modalTextInputDisabled]}
                     placeholder="XXXXX-XXXXXXX-X"
                     placeholderTextColor="#8E8EA0"
                     value={editCnic}
-                    onChangeText={(t) => {
-                      setEditCnic(formatCNIC(t));
-                      if (validationErrors.cnic) {
-                        setValidationErrors((prev) => {
-                          const copy = { ...prev };
-                          delete copy.cnic;
-                          return copy;
-                        });
-                      }
-                    }}
-                    keyboardType="numeric"
-                    maxLength={15}
+                    editable={false}
+                    selectTextOnFocus={false}
                   />
                 </View>
-                {validationErrors.cnic && (
-                  <Text style={styles.modalErrorText}>{validationErrors.cnic}</Text>
-                )}
+
+                {/* Address */}
+                <Text style={[styles.modalInputLabel, rtlText, { marginTop: Spacing.md }]}>{t('address')}</Text>
+                <View style={[styles.modalInputBox, rtlRow, styles.addressInputBox]}>
+                  <MapPin color="#8E8EA0" size={20} style={[styles.inputIcon, isRTL ? { marginLeft: Spacing.sm, marginRight: 0 } : {}]} />
+                  <TextInput
+                    style={[styles.modalTextInput, rtlText, styles.addressTextInput]}
+                    placeholder={t('enter_address')}
+                    placeholderTextColor="#8E8EA0"
+                    value={editAddress}
+                    onChangeText={setEditAddress}
+                    multiline
+                    numberOfLines={3}
+                    textAlignVertical="top"
+                  />
+                </View>
               </View>
 
               {/* Action Button */}
@@ -390,7 +547,7 @@ export const ProfileScreen = () => {
                 {saving ? (
                   <ActivityIndicator color="#FFFFFF" />
                 ) : (
-                  <Text style={styles.modalSubmitBtnText}>Save Profile</Text>
+                  <Text style={styles.modalSubmitBtnText}>{t('save profile')}</Text>
                 )}
               </TouchableOpacity>
             </ScrollView>
@@ -686,5 +843,82 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+  initialsAvatar: {
+    backgroundColor: '#0F7B46',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  initialsText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  imagePickerSection: {
+    alignItems: 'center',
+    marginBottom: Spacing.lg,
+  },
+  imagePickerBox: {
+    width: 130,
+    height: 130,
+    borderRadius: BorderRadius.md,
+    borderWidth: 2,
+    borderColor: '#0F7B46',
+    borderStyle: 'dashed',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F5FDF9',
+  },
+  imagePickerInner: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    width: '100%',
+    height: '100%',
+  },
+  imagePickerBoxImage: {
+    width: 80,
+    height: 80,
+    borderRadius: BorderRadius.md - 4,
+    backgroundColor: '#E8E8E2',
+  },
+  cameraIconBadge: {
+    position: 'absolute',
+    bottom: 25,
+    right: 20,
+    backgroundColor: '#0F7B46',
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FAF9F6',
+  },
+  imagePickerText: {
+    fontSize: 12,
+    color: '#0F7B46',
+    fontWeight: '600',
+    marginTop: 6,
+  },
+  addressInputBox: {
+    height: 90,
+    alignItems: 'flex-start',
+    paddingVertical: Spacing.sm,
+  },
+  addressTextInput: {
+    height: '100%',
+    paddingTop: Platform.OS === 'ios' ? 0 : 2,
+    textAlignVertical: 'top',
+  },
+  inputIcon: {
+    marginRight: Spacing.sm,
+    marginTop: Platform.OS === 'ios' ? 2 : 4,
+  },
+  modalInputBoxDisabled: {
+    backgroundColor: '#F3F4F6',
+    borderColor: '#E5E7EB',
+  },
+  modalTextInputDisabled: {
+    color: '#9CA3AF',
   },
 });
