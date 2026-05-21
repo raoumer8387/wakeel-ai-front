@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "wakeel-ai-front",
-    "slug": "wakeel-ai-front",
+    "name": "Wakeel AI",
+    "slug": "wakeel-ai",
     "scheme": "wakeel-ai",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -18,9 +18,11 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#0a1628"
       },
+      "package": "com.wakeelai.legal",
+      "versionCode": 1,
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },
@@ -29,6 +31,12 @@
     },
     "plugins": [
       "expo-web-browser"
-    ]
+    ],
+    "extra": {
+      "apiBaseUrl": "https://raoumer866-wakeel-ai-be.hf.space",
+      "eas": {
+        "projectId": "a86d5999-3f87-44ca-8c44-d3f16b00678d"
+      }
+    }
   }
 }

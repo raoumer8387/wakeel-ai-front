@@ -17,7 +17,7 @@ import { Colors, Spacing, BorderRadius, Typography } from '../constants/Theme';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 import * as WebBrowser from 'expo-web-browser';
-import * as Google from 'expo-auth-session/providers/google';
+// import * as Google from 'expo-auth-session/providers/google';
 import { useAuth } from '../store/AuthContext';
 
 // Ensure the auth session completes when returning to the app
@@ -332,9 +332,9 @@ const Badge: React.FC<BadgeProps> = ({ icon, label }) => (
 export const WelcomeScreen = ({ navigation }: any) => {
   const { signInWithGoogle } = useAuth();
 
-  const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
-    clientId: '361401902601-phrs46oc97ds5ootflncd3iiocnvugo2.apps.googleusercontent.com',
-  });
+  // const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
+  //   clientId: '361401902601-phrs46oc97ds5ootflncd3iiocnvugo2.apps.googleusercontent.com',
+  // });
 
   const logoScale = useRef(new Animated.Value(0.3)).current;
   const logoOpacity = useRef(new Animated.Value(0)).current;
@@ -401,22 +401,22 @@ export const WelcomeScreen = ({ navigation }: any) => {
     ]).start();
   }, []);
 
-  useEffect(() => {
-    if (response?.type === 'success') {
-      const { id_token } = response.params;
-      if (id_token) {
-        signInWithGoogle(id_token).then((res) => {
-          if (!res.ok) {
-            console.error('Google backend signin failed:', res.error);
-          }
-        });
-      }
-    }
-  }, [response]);
+  // useEffect(() => {
+  //   if (response?.type === 'success') {
+  //     const { id_token } = response.params;
+  //     if (id_token) {
+  //       signInWithGoogle(id_token).then((res) => {
+  //         if (!res.ok) {
+  //           console.error('Google backend signin failed:', res.error);
+  //         }
+  //       });
+  //     }
+  //   }
+  // }, [response]);
 
-  const handleGoogleSignIn = () => {
-    promptAsync();
-  };
+  // const handleGoogleSignIn = () => {
+  //   promptAsync();
+  // };
 
   const handleEmailSignIn = () => {
     navigation.navigate('Login');
@@ -507,6 +507,7 @@ export const WelcomeScreen = ({ navigation }: any) => {
               width: '100%',
             }}
           >
+            {/* 
             <TouchableOpacity
               style={styles.googleButton}
               onPress={handleGoogleSignIn}
@@ -515,6 +516,7 @@ export const WelcomeScreen = ({ navigation }: any) => {
               <GoogleIcon />
               <Text style={styles.googleButtonText}>Continue with Google</Text>
             </TouchableOpacity>
+            */}
 
             <TouchableOpacity
               style={styles.emailButton}

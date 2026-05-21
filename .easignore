@@ -1,0 +1,26 @@
+# Ignore dependency directories
+node_modules/
+
+# Ignore virtual environments and backend folders
+backend/
+venv/
+.venv/
+.env
+
+# Ignore temporary/cache folders
+.expo/
+dist/
+web-build/
+
+# Ignore Word docs and reference logs/notes
+*.docx
+*.docx.bak
+*.log
+*.bak
+api_reference.txt
+New_api.md
+wakeel_api_documentation.md
+
+# Ignore native generated folders
+ios/
+android/

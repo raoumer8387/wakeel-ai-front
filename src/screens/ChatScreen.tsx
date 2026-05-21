@@ -329,6 +329,32 @@ export const ChatScreen = ({ navigation, route }: any) => {
               if (finalCaseId) {
                 caseIdRef.current = finalCaseId;
                 setCaseId(finalCaseId);
+                
+                // Fetch the newly generated document ID and link it to the chat message
+                setTimeout(async () => {
+                  try {
+                    const docRes = await getCaseDocuments(finalCaseId);
+                    if (docRes.ok && docRes.data && docRes.data.documents.length > 0) {
+                      const doc = docRes.data.documents[0];
+                      setMessages((prev) =>
+                        prev.map((msg) => {
+                          if (msg.sender === 'agent2' && msg.attachment) {
+                            return {
+                              ...msg,
+                              attachment: {
+                                ...msg.attachment,
+                                id: doc.id,
+                              },
+                            };
+                          }
+                          return msg;
+                        })
+                      );
+                    }
+                  } catch (err) {
+                    console.error("Failed to sync new document ID:", err);
+                  }
+                }, 1000); // 1s delay to ensure backend DB write is fully committed
               }
               break;
 
@@ -464,9 +490,31 @@ export const ChatScreen = ({ navigation, route }: any) => {
                 <TouchableOpacity
                   style={styles.downloadBtn}
                   onPress={async () => {
-                    if (item.attachment?.id) {
+                    let docId = item.attachment?.id;
+
+                    // Fallback: If document ID is missing (common during live-streaming), fetch on demand
+                    if (!docId && caseIdRef.current) {
                       try {
-                        const url = await getDocumentDownloadUrl(item.attachment.id);
+                        const docRes = await getCaseDocuments(caseIdRef.current);
+                        if (docRes.ok && docRes.data && docRes.data.documents.length > 0) {
+                          docId = docRes.data.documents[0].id;
+                          // Update state so future clicks are immediate
+                          setMessages((prev) =>
+                            prev.map((msg) =>
+                              msg.id === item.id && msg.attachment
+                                ? { ...msg, attachment: { ...msg.attachment, id: docId } }
+                                : msg
+                            )
+                          );
+                        }
+                      } catch (err) {
+                        console.error("On-demand document ID sync failed:", err);
+                      }
+                    }
+
+                    if (docId) {
+                      try {
+                        const url = await getDocumentDownloadUrl(docId);
                         Linking.openURL(url);
                       } catch (err: any) {
                         console.error("Failed to download document:", err.message);
